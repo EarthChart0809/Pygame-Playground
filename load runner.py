@@ -34,6 +34,33 @@ class PlayerCharacter:
 
 # PlayerCharacterクラスの定義 [ここまで]
 
+def draw_map(screen, stage_data, chip_s):
+    wall_color = pg.Color('GRAY')
+    for y, row in enumerate(stage_data):
+        for x, cell in enumerate(row):
+            if cell == "#":  # 壁の場合
+                pg.draw.rect(
+                    screen,
+                    wall_color,
+                    (x * chip_s, y * chip_s, chip_s, chip_s)
+                )
+
+stage_data = [
+    "################",
+    "#   #    #     #",
+    "# # # #  #     #",
+    "#   #    #     #",
+    "#              #",
+    "#              #",
+    "#              #",
+    "#   #    #     #",
+    "#   #    #     #",
+]
+
+items = [(3, 4), (6, 7)]  # アイテムの位置リスト
+
+# PlayerCharacterクラスの定義 [ここまで]
+
 def main():
 
   # 初期化処理
@@ -41,7 +68,7 @@ def main():
   map_s = pg.Vector2(16, 9)  # マップの横・縦の配置数
 
   pg.init()
-  pg.display.set_caption('ぼくのかんがえたさいきょうのげーむ II')
+  pg.display.set_caption('Load Runner')
   disp_w = int(chip_s * map_s.x)
   disp_h = int(chip_s * map_s.y)
   screen = pg.display.set_mode((disp_w, disp_h))
@@ -95,12 +122,28 @@ def main():
     for y in range(0, disp_h, chip_s):  # 横線
       pg.draw.line(screen, grid_c, (0, y), (disp_w, y))
 
+    # ステージデータの描画
+    draw_map(screen, stage_data, chip_s)
+
+    # アイテムの描画
+    for item in items:
+      pg.draw.circle(screen, pg.Color(
+        'YELLOW'), (item[0] * chip_s + chip_s // 2, item[1] * chip_s + chip_s // 2), chip_s // 4)
+
+    # アイテムの収集判定
+    player_tile_pos = (int(reimu.pos.x), int(reimu.pos.y))
+    if player_tile_pos in items:
+      items.remove(player_tile_pos)  # アイテムを削除
+
     # 移動コマンドの処理
     if cmd_move != -1:
-      reimu.turn_to(cmd_move)
-      af_pos = reimu.pos + m_vec[cmd_move]  # 移動(仮)した座標
-      if (0 <= af_pos.x <= map_s.x - 1) and (0 <= af_pos.y <= map_s.y - 1):
-        reimu.move_to(m_vec[cmd_move])  # 画面範囲内なら実際に移動
+        reimu.turn_to(cmd_move)
+        af_pos = reimu.pos + m_vec[cmd_move]  # 移動(仮)した座標
+        if (0 <= af_pos.x <= map_s.x - 1) and (0 <= af_pos.y <= map_s.y - 1):
+          # 壁ではない場合のみ移動
+          if stage_data[int(af_pos.y)][int(af_pos.x)] != "#":
+            reimu.move_to(m_vec[cmd_move])
+
 
     # 自キャラの描画
     screen.blit(reimu.get_img(frame), reimu.get_dp())
@@ -118,6 +161,7 @@ def main():
   # ゲームループ [ここまで]
   pg.quit()
   return exit_code
+  
 
 if __name__ == "__main__":
   code = main()
