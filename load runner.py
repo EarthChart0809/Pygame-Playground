@@ -34,27 +34,88 @@ class PlayerCharacter:
 
 # PlayerCharacterクラスの定義 [ここまで]
 
+class EnemyCharacter:
+    def __init__(self, init_pos, img_path):
+        self.pos = pg.Vector2(init_pos)
+        self.size = pg.Vector2(48, 64)
+        self.dir = 2
+        img_raw = pg.image.load(img_path)
+        self.__img_arr = []
+        for i in range(4):
+            self.__img_arr.append([])
+            for j in range(3):
+                p = pg.Vector2(24 * j, 32 * i)
+                tmp = img_raw.subsurface(pg.Rect(p, (24, 32)))
+                tmp = pg.transform.scale(tmp, self.size)
+                self.__img_arr[i].append(tmp)
+            self.__img_arr[i].append(self.__img_arr[i][1])
+
+    def move_toward(self, player_pos, stage_data, directions):
+        """
+        指定されたアルゴリズムで移動。
+        """
+        # 1. 同じ高さにいて、地続きの場合
+        if self.pos.y == player_pos.y:
+            step = 1 if self.pos.x < player_pos.x else -1
+            for x in range(int(self.pos.x), int(player_pos.x), step):
+                if stage_data[int(self.pos.y)][x] == "#":
+                    break
+            else:
+                self.pos.x += step
+                self.dir = 1 if step > 0 else 3
+                return
+
+        # 2. プレイヤーのいる高さに行ける場合
+        diff_y = int(player_pos.y - self.pos.y)
+        step_y = 1 if diff_y > 0 else -1
+        if stage_data[int(self.pos.y + step_y)][int(self.pos.x)] not in ["#", "="]:
+            self.pos.y += step_y
+            self.dir = 2 if step_y > 0 else 0
+            return
+
+        # 3. その他、優先順位の高い移動
+        for move, vec in directions.items():
+            new_pos = self.pos + vec
+            if stage_data[int(new_pos.y)][int(new_pos.x)] != "#":
+                self.pos += vec
+                self.dir = move
+                return
+
+    def get_dp(self):
+        return self.pos * 48 - pg.Vector2(0, 24)
+
+    def get_img(self, frame):
+        return self.__img_arr[self.dir][frame // 6 % 4]
+
+# EnemyCharacterクラスの定義 [ここまで]
+
+wall_img = pg.image.load('./data/img/wall.png')
+ladder_img = pg.image.load('./data/img/ladder.png')
+rope_img = pg.image.load('./data/img/rope.png')
+ground_img = pg.image.load('./data/img/ground.png')
+
 def draw_map(screen, stage_data, chip_s):
-    wall_color = pg.Color('GRAY')
     for y, row in enumerate(stage_data):
         for x, cell in enumerate(row):
-            if cell == "#":  # 壁の場合
-                pg.draw.rect(
-                    screen,
-                    wall_color,
-                    (x * chip_s, y * chip_s, chip_s, chip_s)
-                )
+            rect = (x * chip_s, y * chip_s, chip_s, chip_s)
+            if cell == "#":  # 壁
+                screen.blit(wall_img, rect)  # 壁の画像を描画
+            elif cell == "L":  # 階段
+                screen.blit(ladder_img, rect)  # 階段の画像を描画
+            elif cell == "-":  # ロープ
+                screen.blit(rope_img, rect)  # ロープの画像を描画
+            elif cell == "=":  # 地面
+                screen.blit(ground_img, rect)  # 地面の画像を描画
 
+#ステージ
 stage_data = [
-    "################",
-    "#   #    #     #",
-    "# # # #  #     #",
-    "#   #    #     #",
-    "#              #",
-    "#              #",
-    "#              #",
-    "#   #    #     #",
-    "#   #    #     #",
+    "#################",
+    "#               #",
+    "#   L===========#",
+    "#   L           #",
+    "#   L           #",
+    "#===#===========#",
+    "#################",
 ]
 
 items = [(3, 4), (6, 7)]  # アイテムの位置リスト
@@ -79,7 +140,7 @@ def main():
   exit_code = '000'
 
   # グリッド設定
-  grid_c = '#bbbbbb'
+  grid_c = '#dddddd'  # 薄いグレー
 
   # 自キャラ移動関連
   cmd_move = -1  # 移動コマンドの管理変数
@@ -92,6 +153,22 @@ def main():
 
   # 自キャラの生成・初期化
   reimu = PlayerCharacter((2, 3), './data/img/reimu.png')
+  enemy_list = [
+      EnemyCharacter((4, 2), './data/img/enemy.png'),
+      EnemyCharacter((6, 4), './data/img/enemy.png'),
+  ]
+
+  wall_img = pg.image.load('./data/img/wall.png')
+  ladder_img = pg.image.load('./data/img/ladder.png')
+  rope_img = pg.image.load('./data/img/rope.png')
+  ground_img = pg.image.load('./data/img/ground.png')
+  
+  
+  wall_img = pg.transform.scale(wall_img, (chip_s, chip_s))
+  ladder_img = pg.transform.scale(ladder_img, (chip_s, chip_s))
+  rope_img = pg.transform.scale(rope_img, (chip_s, chip_s))
+  ground_img = pg.transform.scale(ground_img, (chip_s, chip_s))  # 必要に応じてサイズ調整
+
 
   # ゲームループ
   while not exit_flag:
@@ -130,23 +207,54 @@ def main():
       pg.draw.circle(screen, pg.Color(
         'YELLOW'), (item[0] * chip_s + chip_s // 2, item[1] * chip_s + chip_s // 2), chip_s // 4)
 
+    if cmd_move != -1:  # 有効な移動コマンドがある場合
+      af_pos = reimu.pos + m_vec[cmd_move]  # 仮の移動先座標
+
+    # 上下移動の制約
+      if cmd_move in [0, 2]:  # 上または下
+        # 現在の位置が梯子上、または移動先が梯子の場合に移動を許可
+        if stage_data[int(reimu.pos.y)][int(reimu.pos.x)] == "L" or \
+          stage_data[int(af_pos.y)][int(reimu.pos.x)] == "L":
+            if 0 <= af_pos.y < map_s.y:  # 範囲内チェック
+                reimu.move_to(m_vec[cmd_move])
+
+    # 左右移動の制約
+      elif cmd_move in [1, 3]:  # 右または左
+        # 地面または梯子の上でのみ左右移動可能
+        if stage_data[int(reimu.pos.y) + 1][int(reimu.pos.x)] in ["=", "L"]:
+            if 0 <= af_pos.x < map_s.x:  # 範囲内チェック
+                if stage_data[int(reimu.pos.y)][int(af_pos.x)] in [" ","L", "-", "="]:
+                    reimu.move_to(m_vec[cmd_move])
+
+    # 重力処理
+    af_pos = reimu.pos + pg.Vector2(0, 1)  # 下の位置を確認
+    if 0 <= af_pos.y < map_s.y:  # 範囲内チェック
+      if stage_data[int(af_pos.y)][int(reimu.pos.x)] == " ":  # 下が空間の場合
+        reimu.move_to(pg.Vector2(0, 1))  # 自動で落下
+
+
     # アイテムの収集判定
     player_tile_pos = (int(reimu.pos.x), int(reimu.pos.y))
     if player_tile_pos in items:
       items.remove(player_tile_pos)  # アイテムを削除
 
-    # 移動コマンドの処理
-    if cmd_move != -1:
-        reimu.turn_to(cmd_move)
-        af_pos = reimu.pos + m_vec[cmd_move]  # 移動(仮)した座標
-        if (0 <= af_pos.x <= map_s.x - 1) and (0 <= af_pos.y <= map_s.y - 1):
-          # 壁ではない場合のみ移動
-          if stage_data[int(af_pos.y)][int(af_pos.x)] != "#":
-            reimu.move_to(m_vec[cmd_move])
+    # 敵の移動処理
+    directions = {
+      0: pg.Vector2(0, -1),  # 上
+      1: pg.Vector2(1, 0),   # 右
+      2: pg.Vector2(0, 1),   # 下
+      3: pg.Vector2(-1, 0),  # 左
+  }
 
+    for enemy in enemy_list:
+      enemy.move_toward(reimu.pos, stage_data, directions)
 
     # 自キャラの描画
     screen.blit(reimu.get_img(frame), reimu.get_dp())
+
+    # 敵キャラクターの描画
+    for enemy in enemy_list:
+      screen.blit(enemy.get_img(frame), enemy.get_dp())
 
     # フレームカウンタの描画
     frame += 1
@@ -162,7 +270,6 @@ def main():
   pg.quit()
   return exit_code
   
-
 if __name__ == "__main__":
   code = main()
   print(f'プログラムを「コード{code}」で終了しました。')
