@@ -8,7 +8,7 @@ class PlayerCharacter:
   def __init__(self, init_pos, img_path):
     self.pos = pg.Vector2(init_pos)
     self.size = pg.Vector2(48, 64)
-    self.dir = 2
+    self.dir = 1
     img_raw = pg.image.load(img_path)
     self.__img_arr = []
     for i in range(4):
@@ -27,7 +27,7 @@ class PlayerCharacter:
     self.pos += vec
 
   def get_dp(self):
-    return self.pos * 48 - pg.Vector2(0, 24)
+    return self.pos * 32 - pg.Vector2(0, 24)
 
   def get_img(self, frame):
     return self.__img_arr[self.dir][frame // 6 % 4]
@@ -82,7 +82,7 @@ class EnemyCharacter:
                 return
 
     def get_dp(self):
-        return self.pos * 48 - pg.Vector2(0, 24)
+        return self.pos * 32 - pg.Vector2(0, 24)
 
     def get_img(self, frame):
         return self.__img_arr[self.dir][frame // 6 % 4]
@@ -107,7 +107,27 @@ def draw_map(screen, stage_data, chip_s):
             elif cell == "=":  # 地面
                 screen.blit(ground_img, rect)  # 地面の画像を描画
 
-#ステージ
+def destroy_tile_by_key(player_pos, direction, stage_data, broken_tiles, respawn_time=300):
+    """
+    プレイヤーの左右の地面を壊す処理。
+    direction: -1 (左) または 1 (右)
+    broken_tiles: 壊れたタイルを記録するリスト
+    respawn_time: 復活までのフレーム数
+    """
+    tile_pos = pg.Vector2(player_pos.x + direction,
+                          player_pos.y + 1)  # プレイヤーの真下を確認
+    x, y = int(tile_pos.x), int(tile_pos.y)
+
+    # タイルが範囲内か確認
+    if 0 <= y < len(stage_data) and 0 <= x < len(stage_data[0]):
+        # 壊せるのは地面 ("=") のみ
+        if stage_data[y][x] == "=":
+            # 地面を壊して空白に変更
+            stage_data[y] = stage_data[y][:x] + " " + stage_data[y][x + 1:]
+            # 壊れたタイルの情報を記録（復活時間を設定）
+            broken_tiles.append((x, y, respawn_time))
+
+#ステージ要素
 stage_data = [
     "#################",
     "#               #",
@@ -118,14 +138,18 @@ stage_data = [
     "#################",
 ]
 
-items = [(3, 4), (6, 7)]  # アイテムの位置リスト
+# アイテムの位置リスト
+items = [(3, 4), (6, 7)]  
+
+# 壊れたタイルを記録するリスト
+broken_tiles = []  # [(x, y, remaining_time), ...]
 
 # PlayerCharacterクラスの定義 [ここまで]
 
 def main():
 
   # 初期化処理
-  chip_s = 48  # マップチップの基本サイズ
+  chip_s = 32  # マップチップの基本サイズ
   map_s = pg.Vector2(16, 9)  # マップの横・縦の配置数
 
   pg.init()
@@ -189,6 +213,10 @@ def main():
           cmd_move = 2
         elif event.key == pg.K_LEFT:
           cmd_move = 3
+        elif event.key == pg.K_a:  # Aキーで左側の地面を壊す
+          destroy_tile_by_key(reimu.pos, -1, stage_data, broken_tiles)
+        elif event.key == pg.K_d:  # Dキーで右側の地面を壊す
+          destroy_tile_by_key(reimu.pos, 1, stage_data, broken_tiles)
 
     # 背景描画
     screen.fill(pg.Color('WHITE'))
@@ -245,6 +273,15 @@ def main():
       2: pg.Vector2(0, 1),   # 下
       3: pg.Vector2(-1, 0),  # 左
   }
+
+    # 壊れたタイルの復活処理
+    for i, (x, y, time) in enumerate(broken_tiles):
+        if time > 0:
+            broken_tiles[i] = (x, y, time - 1)  # 時間を1減らす
+        else:
+            # タイルを復活させる
+            stage_data[y] = stage_data[y][:x] + "=" + stage_data[y][x + 1:]
+            broken_tiles.pop(i)  # 復活済みタイルをリストから削除
 
     for enemy in enemy_list:
       enemy.move_toward(reimu.pos, stage_data, directions)
