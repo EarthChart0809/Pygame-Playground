@@ -1,4 +1,5 @@
 import pygame as pg
+import clock
 
 # PlayerCharacterクラスの定義 [ここから]
 
@@ -19,6 +20,11 @@ class PlayerCharacter:
         tmp = pg.transform.scale(tmp, self.size)
         self.__img_arr[i].append(tmp)
       self.__img_arr[i].append(self.__img_arr[i][1])
+
+    # rect属性を追加
+    self.image = self.__img_arr[0][0]  # 初期の画像
+    self.rect = self.image.get_rect()
+    self.rect.topleft = self.get_dp()
 
   def turn_to(self, dir):
     self.dir = dir
@@ -49,6 +55,10 @@ class EnemyCharacter:
                 tmp = pg.transform.scale(tmp, self.size)
                 self.__img_arr[i].append(tmp)
             self.__img_arr[i].append(self.__img_arr[i][1])
+        # rect属性を追加
+        self.image = self.__img_arr[0][0]  # 初期の画像
+        self.rect = self.image.get_rect()
+        self.rect.topleft = self.get_dp()
 
     def move_toward(self, player_pos, stage_data, directions):
         """
@@ -89,10 +99,67 @@ class EnemyCharacter:
 
 # EnemyCharacterクラスの定義 [ここまで]
 
-wall_img = pg.image.load('./data/img/wall.png')
-ladder_img = pg.image.load('./data/img/ladder.png')
-rope_img = pg.image.load('./data/img/rope.png')
-ground_img = pg.image.load('./data/img/ground.png')
+class Goal(pg.sprite.Sprite):
+    def __init__(self, pos, size):
+        super().__init__()
+        self.image = pg.Surface(size)
+        self.image.fill((0, 255, 0))  # 緑色のゴール
+        self.rect = self.image.get_rect(topleft=pos)
+
+# 画像の読み込み関数
+def load_image(path, size=None):
+    try:
+        img = pg.image.load(path)
+        if size:
+            img = pg.transform.scale(img, size)
+        return img
+    except pg.error as e:
+        print(f"Error loading image {path}: {e}")
+        return None
+
+# 画像の読み込み
+wall_img = load_image('./data/img/wall.png', (32, 32))  # サイズを変更して読み込む
+ladder_img = load_image('./data/img/ladder.png', (32, 32))
+rope_img = load_image('./data/img/rope.png', (32, 32))
+ground_img = load_image('./data/img/ground.png', (32, 32))
+life_icon = load_image('./data/img/life_icon.png',(32, 32))  
+
+# Pygameの初期化
+pg.init()
+screen = pg.display.set_mode((800, 600))
+pg.display.set_caption("Load Runner")
+clock = pg.time.Clock()
+pg.font.init()
+
+# プレイヤー初期設定
+player_pos = [400, 300]
+
+# フォントを定義 (デフォルトフォント、サイズ36)
+font = pg.font.Font(None, 36)
+
+# グラフィック設定
+player_life = 3  # プレイヤーの残りライフ
+
+# ゲーム内目標 (例: ゴールまであと3つ)
+goal_count = 3
+
+def draw_score(surface, score):
+    score_text = font.render(f"Score: {score}", True, (255, 255, 255))  # 白い文字
+    surface.blit(score_text, (10, 10))  # 画面左上に表示
+
+def handle_collisions(player, goals, score):
+    for goal in pg.sprite.spritecollide(player, goals, True):  # プレイヤーとゴールが衝突
+        score += 10  # スコアを加算
+    return score
+
+# ゲーム内での目標進捗更新処理
+def handle_goal_progress(player_pos, goal_positions):
+    collected_goals = 0
+    for goal in goal_positions:
+        if player_pos == goal:
+            collected_goals += 1
+    return collected_goals
+
 
 def draw_map(screen, stage_data, chip_s):
     for y, row in enumerate(stage_data):
@@ -127,15 +194,51 @@ def destroy_tile_by_key(player_pos, direction, stage_data, broken_tiles, respawn
             # 壊れたタイルの情報を記録（復活時間を設定）
             broken_tiles.append((x, y, respawn_time))
 
+# 画面更新の際、情報を固定位置に描画する関数を作成
+def draw_fixed_info(surface, score, life, goal_count):
+  # ライフ表示（左上）
+  life_text_color = (255, 0, 0) if life <= 1 else (255, 255, 255)
+  life_text = font.render(f"Lives:", True, life_text_color)
+  surface.blit(life_text, (10, 10))
+
+  # ハートアイコンの色の変化
+  for i in range(life):
+    surface.blit(life_icon, (10 + i * 30, 40))  # ハートアイコンを描画（位置調整）
+
+  # スコア表示（右上）
+  score_text = font.render(f"Score: {score}", True, (255, 255, 255))
+  surface.blit(score_text, (surface.get_width() - 150, 10))
+
+  # 目標表示（右下）
+  goal_text = font.render(f"Goal: {goal_count}", True, (255, 255, 255))
+  surface.blit(goal_text, (surface.get_width() - 150, surface.get_height() - 30))
+
+  # ゴール進捗バー（画面上部）
+  progress_width = 200  # バーの幅
+  progress_height = 20  # バーの高さ
+  progress_bg_color = (100, 100, 100)  # 背景色（灰色）
+  progress_color = (0, 255, 0)  # 進捗色（緑）
+
+  # ゴール進捗バーの描画
+  progress_bar_rect = pg.Rect(surface.get_width() // 2 - progress_width // 2, 30, progress_width, progress_height)
+  pg.draw.rect(surface, progress_bg_color, progress_bar_rect)  # 背景のバー
+  progress_fill_width = (goal_count / 10) * progress_width  # 目標10個収集
+  pg.draw.rect(surface, progress_color, pg.Rect(progress_bar_rect.x,
+                                                  progress_bar_rect.y, progress_fill_width, progress_bar_rect.height))  # 進捗のバー
+
+
 #ステージ要素
 stage_data = [
-    "#################",
-    "#               #",
-    "#   L===========#",
-    "#   L           #",
-    "#   L           #",
-    "#===#===========#",
-    "#################",
+    "###############################",
+    "#                             #",
+    "#     L=============          #",
+    "#     L                       #",
+    "#     L                       #",
+    "#============L================#",
+    "#            L                #",
+    "#            L                #",
+    "#   =========L================#",
+    "###############################",
 ]
 
 # アイテムの位置リスト
@@ -144,16 +247,18 @@ items = [(3, 4), (6, 7)]
 # 壊れたタイルを記録するリスト
 broken_tiles = []  # [(x, y, remaining_time), ...]
 
-# PlayerCharacterクラスの定義 [ここまで]
+# ゲーム変数
+running = True
+game_over = False
+player_lives = 3
 
 def main():
+  global game_over  
 
   # 初期化処理
   chip_s = 32  # マップチップの基本サイズ
-  map_s = pg.Vector2(16, 9)  # マップの横・縦の配置数
+  map_s = pg.Vector2(len(stage_data[0]),len(stage_data))  # マップの横・縦の配置数
 
-  pg.init()
-  pg.display.set_caption('Load Runner')
   disp_w = int(chip_s * map_s.x)
   disp_h = int(chip_s * map_s.y)
   screen = pg.display.set_mode((disp_w, disp_h))
@@ -182,20 +287,69 @@ def main():
       EnemyCharacter((6, 4), './data/img/enemy.png'),
   ]
 
+#ステージ要素の描画設定
   wall_img = pg.image.load('./data/img/wall.png')
   ladder_img = pg.image.load('./data/img/ladder.png')
   rope_img = pg.image.load('./data/img/rope.png')
   ground_img = pg.image.load('./data/img/ground.png')
-  
+  item_icon_img = pg.image.load('./data/img/item_icon.png')
   
   wall_img = pg.transform.scale(wall_img, (chip_s, chip_s))
   ladder_img = pg.transform.scale(ladder_img, (chip_s, chip_s))
   rope_img = pg.transform.scale(rope_img, (chip_s, chip_s))
-  ground_img = pg.transform.scale(ground_img, (chip_s, chip_s))  # 必要に応じてサイズ調整
+  ground_img = pg.transform.scale(ground_img, (chip_s, chip_s))  
+  item_icon = pg.transform.scale(item_icon_img,(chip_s,chip_s))
 
+  # ゴールの作成とグループ管理
+  goals = pg.sprite.Group()
+
+  # ゴールを特定の位置に配置
+  fixed_goal_position = (5 * chip_s, 1 * chip_s)  # 例えば、5列目の1行目（梯子の上）
+  fixed_goal = Goal(fixed_goal_position, (30, 30))
+  goals.add(fixed_goal)
+
+  # スコアとライフ
+  score = 0
+  player_lives = 3
 
   # ゲームループ
   while not exit_flag:
+    # プレイヤーと敵の衝突判定
+    for enemy in enemy_list:
+      if reimu.rect.colliderect(enemy.rect):  # 矩形の衝突判定
+        print("敵にぶつかりました！ゲームオーバー")
+        game_over = True
+        break
+
+    # 穴に落ちて埋まる判定
+    player_x, player_y = int(reimu.pos.x), int(reimu.pos.y)
+    if stage_data[player_y + 1][player_x] == "=" and stage_data[player_y][player_x] == "#":
+        print("穴に埋まりました！ゲームオーバー")
+        game_over = True
+
+    if game_over:  # ゲームオーバー状態
+        screen.fill((0, 0, 0))  # 背景を黒にする
+        game_over_text = font.render("Game Over!", True, (255, 0, 0))
+        restart_text = font.render(
+            "Press R to Restart or Q to Quit", True, (255, 255, 255))
+        screen.blit(game_over_text, (disp_w // 2 - 100, disp_h // 2 - 50))
+        screen.blit(restart_text, (disp_w // 2 - 150, disp_h // 2 + 20))
+        pg.display.flip()
+
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                exit_flag = True
+                exit_code = '002'
+            if event.type == pg.KEYDOWN:
+                if event.key == pg.K_r:  # Rキーで再スタート
+                    score = 0
+                    player_lives = 3
+                    game_over = False
+                elif event.key == pg.K_q:  # Qキーで終了
+                    exit_flag = True
+                    exit_code = '003'
+        clock.tick(30)
+        continue  # ゲームオーバー中は他の処理をスキップ
 
     # システムイベントの検出
     cmd_move = -1
@@ -232,8 +386,8 @@ def main():
 
     # アイテムの描画
     for item in items:
-      pg.draw.circle(screen, pg.Color(
-        'YELLOW'), (item[0] * chip_s + chip_s // 2, item[1] * chip_s + chip_s // 2), chip_s // 4)
+      item_rect = pg.Rect(item[0] * chip_s, item[1] *chip_s, chip_s, chip_s)  # 画像を描画する位置
+      screen.blit(item_icon, item_rect)  # 画像を描画
 
     if cmd_move != -1:  # 有効な移動コマンドがある場合
       af_pos = reimu.pos + m_vec[cmd_move]  # 仮の移動先座標
@@ -272,7 +426,17 @@ def main():
       1: pg.Vector2(1, 0),   # 右
       2: pg.Vector2(0, 1),   # 下
       3: pg.Vector2(-1, 0),  # 左
-  }
+    }
+
+    # 穴に落ちて埋まる判定
+    player_x, player_y = int(reimu.pos.x), int(reimu.pos.y)
+    below_player = stage_data[player_y +
+                          1][player_x] if player_y + 1 < map_s.y else None
+    current_tile = stage_data[player_y][player_x]
+
+    if below_player == "=" and current_tile == "#":  # 足元が穴、現在位置が埋まっている場合
+      print("穴に埋まりました！ゲームオーバー")
+      game_over = True
 
     # 壊れたタイルの復活処理
     for i, (x, y, time) in enumerate(broken_tiles):
@@ -299,9 +463,31 @@ def main():
     screen.blit(font.render(frm_str, True, 'BLACK'), (10, 10))
     screen.blit(font.render(f'{reimu.pos}', True, 'BLACK'), (10, 20))
 
-    # 画面の更新と同期
-    pg.display.update()
-    clock.tick(30)
+    # ゲームループ内での進捗表示
+    collected_goals = 0  # プレイヤーが収集したゴールアイテムの数
+    goal_positions = [(3, 4), (6, 7)]  # ゴールアイテムの位置（例）
+
+    # ゲームループ内で進捗を更新
+    collected_goals = handle_goal_progress(reimu.pos, goal_positions)
+
+    # 固定情報の描画
+    draw_fixed_info(screen, score, player_lives, collected_goals)
+
+    # ゴールの描画
+    goals.draw(screen)
+
+    # スコアやライフが条件を満たしたらゲームオーバー
+    if player_lives <= 0:
+        game_over = True
+
+    # 固定位置に情報を描画
+    draw_fixed_info(screen, score, player_life, goal_count)
+
+    # 画面の更新
+    pg.display.flip()
+
+    # FPS制御
+    clock.tick(30)  # 30 FPSに制限
 
   # ゲームループ [ここまで]
   pg.quit()
