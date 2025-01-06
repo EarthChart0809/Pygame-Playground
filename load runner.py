@@ -1,117 +1,7 @@
 import pygame as pg
-import clock
-import time
-
-# PlayerCharacterクラスの定義 [ここから]
-
-class PlayerCharacter:
-
-  # コンストラクタ
-  def __init__(self, init_pos, img_path):
-    self.pos = pg.Vector2(init_pos)
-    self.size = pg.Vector2(48, 64)
-    self.dir = 1
-    img_raw = pg.image.load(img_path)
-    self.__img_arr = []
-    for i in range(4):
-      self.__img_arr.append([])
-      for j in range(3):
-        p = pg.Vector2(24 * j, 32 * i)
-        tmp = img_raw.subsurface(pg.Rect(p, (24, 32)))
-        tmp = pg.transform.scale(tmp, self.size)
-        self.__img_arr[i].append(tmp)
-      self.__img_arr[i].append(self.__img_arr[i][1])
-
-    # rect属性を追加
-    self.image = self.__img_arr[0][0]  # 初期の画像
-    self.rect = self.image.get_rect()
-    self.rect.topleft = self.get_dp()
-
-  def turn_to(self, dir):
-    self.dir = dir
-
-  def move_to(self, vec):
-    self.pos += vec
-
-  def get_dp(self):
-    return self.pos * 32 - pg.Vector2(0, 24)
-
-  def get_img(self, frame):
-    return self.__img_arr[self.dir][frame // 6 % 4]
-
-# PlayerCharacterクラスの定義 [ここまで]
-
-class EnemyCharacter:
-    def __init__(self, init_pos, img_path):
-        self.pos = pg.Vector2(init_pos)
-        self.size = pg.Vector2(48, 64)
-        self.dir = 2
-        img_raw = pg.image.load(img_path)
-        self.__img_arr = []
-        for i in range(4):
-            self.__img_arr.append([])
-            for j in range(3):
-                p = pg.Vector2(24 * j, 32 * i)
-                tmp = img_raw.subsurface(pg.Rect(p, (24, 32)))
-                tmp = pg.transform.scale(tmp, self.size)
-                self.__img_arr[i].append(tmp)
-            self.__img_arr[i].append(self.__img_arr[i][1])
-        # rect属性を追加
-        self.image = self.__img_arr[0][0]  # 初期の画像
-        self.rect = self.image.get_rect()
-        self.rect.topleft = self.get_dp()
-
-    def move_toward(self, player_pos, stage_data, directions):
-        """
-        指定されたアルゴリズムで移動。
-        """
-        # 移動速度の調整
-        move_speed = 0.05  # 0.5にすると半分の速さで移動
-
-        # 1. 同じ高さにいて、地続きの場合
-        if self.pos.y == player_pos.y:
-            step = move_speed if self.pos.x < player_pos.x else -move_speed
-            if step != 0:
-              x = self.pos.x
-              while (step > 0 and x < player_pos.x) or (step < 0 and x > player_pos.x):
-                if stage_data[int(self.pos.y)][int(x)] == "#":
-                    break
-                else:
-                    x += step
-                    self.pos.x = x
-                    self.dir = 1 if step > 0 else 3
-              return
-
-        # 2. プレイヤーのいる高さに行ける場合
-        diff_y = int(player_pos.y - self.pos.y)
-        step_y = move_speed if diff_y > 0 else - move_speed
-        if stage_data[int(self.pos.y + step_y)][int(self.pos.x)] not in ["#", "="]:
-            self.pos.y += step_y
-            self.dir = 2 if step_y > 0 else 0
-            return
-
-        # 3. その他、優先順位の高い移動
-        for move, vec in directions.items():
-            new_pos = self.pos + vec * move_speed
-            if stage_data[int(new_pos.y)][int(new_pos.x)] != "#":
-                self.pos += vec * move_speed
-                self.dir = move
-                return
-
-    def get_dp(self):
-        return self.pos * 32 - pg.Vector2(0, 24)
-
-    def get_img(self, frame):
-        return self.__img_arr[self.dir][frame // 6 % 4]
-
-# EnemyCharacterクラスの定義 [ここまで]
-
-class Goal(pg.sprite.Sprite):
-    def __init__(self, pos, size):
-        super().__init__()
-        self.image = pg.Surface(size)
-        self.image.fill((0, 255, 0))  # 緑色のゴール
-        self.rect = self.image.get_rect(topleft=pos)
+from player import PlayerCharacter
+from enemy import EnemyCharacter
+from goal import Goal
 
 # 画像の読み込み関数
 def load_image(path, size=None):
@@ -210,11 +100,16 @@ def destroy_tile_by_key(player_pos, direction, stage_data, broken_tiles, respawn
             broken_tiles.append((x, y, respawn_time))
 
 # 画面更新の際、情報を固定位置に描画する関数を作成
-def draw_fixed_info(surface, score, life, goal_count):
+def draw_fixed_info(surface, score, life, goal_count,reimu,frame):
   # ライフ表示（左上）
   life_text_color = (255, 0, 0) if life <= 1 else (255, 255, 255)
   life_text = font.render(f"Lives:", True, life_text_color)
   surface.blit(life_text, (10, 10))
+
+  for i in range(life):
+      # 無敵状態のとき、ハートアイコンを点滅させる（例: フレーム数で奇数のとき非表示）
+      if not (reimu.invincible and frame % 10 < 5):
+          surface.blit(life_icon, (10 + i * 30, 40))
 
   # ハートアイコンの色の変化
   for i in range(life):
@@ -236,10 +131,10 @@ def draw_fixed_info(surface, score, life, goal_count):
 
   # ゴール進捗バーの描画
   progress_bar_rect = pg.Rect(surface.get_width() // 2 - progress_width // 2, 30, progress_width, progress_height)
-  pg.draw.rect(surface, progress_bg_color, progress_bar_rect)  # 背景のバー
-  progress_fill_width = (goal_count / 10) * progress_width  # 目標10個収集
+  pg.draw.rect(surface, progress_bg_color, progress_bar_rect)
+  progress_fill_width = (goal_items_collected / GOAL_ITEM_COUNT) * progress_width  # 目標10個収集
   pg.draw.rect(surface, progress_color, pg.Rect(progress_bar_rect.x,
-                                                  progress_bar_rect.y, progress_fill_width, progress_bar_rect.height))  # 進捗のバー
+                                                progress_bar_rect.y, progress_fill_width, progress_bar_rect.height))
 
 # ゴール収集時の処理
 def check_goal_collision(player_rect, goals, goal_count):
@@ -285,20 +180,32 @@ def check_game_clear():
 
 #ステージ要素
 stage_data = [
-    "###############################",
-    "#                             #",
-    "#     L=============          #",
-    "#     L                       #",
-    "#     L                       #",
-    "#============L================#",
-    "#            L                #",
-    "#            L                #",
-    "#   =========L================#",
-    "###############################",
+    "########################################",
+    "#                                      #",
+    "#     L=====================L          #",
+    "#     L                     L          #",
+    "#     L                     LL         #",
+    "#========L===========        L=========#",
+    "#        L                 L           #",
+    "#        L                 L           #",
+    "#  L=====L==========L   ====L==========#",
+    "#  L                L                  #",
+    "#  L                L                  #",
+    "#  L     L=====     L     ====L        #",
+    "#  L     L          L         L        #",
+    "#  L     L          L         LL       #",
+    "#  L=====L     =====L=====     L=======#",
+    "#  L                                  L#",
+    "#  L                                  L#",
+    "#  ====================================#",
+    "#                                      #",
+    "########################################",
 ]
 
 # アイテムの位置リスト
-items = [(3, 4), (6, 7)]  
+items = [(3, 4), (7, 5), (10, 15), (12, 18), (15, 10), (20, 8)]
+goal_positions = [(3, 4), (7, 5), (10, 15), (12, 18)]  # ゴールアイテムの位置
+goal_count = handle_goal_progress(player_pos, goal_positions)  # ゴール進捗の更新
 
 # 壊れたタイルを記録するリスト
 broken_tiles = []  # [(x, y, remaining_time), ...]
@@ -312,10 +219,11 @@ goal_items_collected = 0
 MAX_LIVES = 3
 GOAL_ITEM_COUNT = 10
 lives = MAX_LIVES
+game_state = "playing"  # 初期状態はゲーム中
 
 
 def main():
-  global game_over, player_lives, goal_items_collected, stage
+  global game_state, player_lives, goal_items_collected, stage
 
   # 初期化処理
   chip_s = 32  # マップチップの基本サイズ
@@ -345,8 +253,10 @@ def main():
   # 自キャラの生成・初期化
   reimu = PlayerCharacter((2, 3), './data/img/reimu.png')
   enemy_list = [
-      EnemyCharacter((4, 2), './data/img/enemy.png'),
-      EnemyCharacter((6, 4), './data/img/enemy.png'),
+    EnemyCharacter((6, 3), './data/img/enemy.png'),  # プレイヤーの近く
+    EnemyCharacter((10, 6), './data/img/enemy.png'), # ステージ中盤
+    EnemyCharacter((15, 15), './data/img/enemy.png'), # 遠い場所
+    EnemyCharacter((18, 10), './data/img/enemy.png'), # 別ルート上
   ]
 
 #ステージ要素の描画設定
@@ -370,6 +280,7 @@ def main():
   fixed_goal_position = (10 * chip_s, 1 * chip_s)  # 例えば、5列目の1行目（梯子の上）
   fixed_goal = Goal(fixed_goal_position, (30, 30))
   goals.add(fixed_goal)
+  goal_count = len(goals)  # ゴールの初期数を更新
 
   # スコアとライフ
   score = 0
@@ -381,10 +292,15 @@ def main():
   while not exit_flag:
     # プレイヤーと敵の衝突判定
     for enemy in enemy_list:
-      if reimu.rect.colliderect(enemy.rect):  # 矩形の衝突判定
-        print("敵にぶつかりました！ゲームオーバー")
-        game_over = True
-        break
+      # 無敵状態でない場合のみライフを減らす
+      if reimu.rect.colliderect(enemy.rect) and not reimu.invincible:
+        player_lives -= 1  # ライフを1減少
+        reimu.invincible = True  # 無敵状態をオン
+        reimu.invincible_timer = 60  # 無敵状態の持続時間（例: 60フレーム = 2秒程度）
+        print(f"敵にぶつかりました！残りライフ: {player_lives}")
+        if player_lives <= 0:
+            game_state = "game_over"
+            print("ライフが尽きました！ゲームオーバー")
 
     # 穴に落ちて埋まる判定
     player_x, player_y = int(reimu.pos.x), int(reimu.pos.y)
@@ -392,33 +308,75 @@ def main():
         print("穴に埋まりました！ゲームオーバー")
         game_over = True
 
-    if game_over:
-        screen.fill((0, 0, 0))  # 背景を黒にする
-        game_over_text = font.render("Game Over!", True, (255, 0, 0))
-        restart_text = font.render(
-            "Press R to Restart or Q to Quit", True, (255, 255, 255))
-        screen.blit(game_over_text, (disp_w // 2 - 100, disp_h // 2 - 50))
-        screen.blit(restart_text, (disp_w // 2 - 150, disp_h // 2 + 20))
-        pg.display.flip()
+    # イベント処理
+    for event in pg.event.get():
+        if event.type == pg.QUIT:
+          exit_flag = True
+        elif event.type == pg.KEYDOWN:
+          if event.key == pg.K_r and game_state in ["game_over", "game_clear"]:
+              # ゲームリスタート
+              game_state = "playing"
+              player_lives = 3
+              score = 0
+              goal_items_collected = 0
+              stage = 1
+          elif event.key == pg.K_q and game_state in ["game_over", "game_clear"]:
+              # ゲーム終了
+              exit_flag = True
 
-        # イベント処理 (再スタートまたは終了)
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                exit_flag = True
-            if event.type == pg.KEYDOWN:
-              if event.key == pg.K_r:  # Rキーで再スタート
-                score = 0
-                player_lives = MAX_LIVES
-                goal_items_collected = 0
-                stage = 1  # ステージ1にリセット
-                game_over = False
-              elif event.key == pg.K_q:  # Qキーで終了
-                exit_flag = True
-            clock.tick(30)
-            continue
+    # ゲームの状態に応じた処理
+    if game_state == "playing":
+      # ゲーム進行処理
+      screen.fill((0, 0, 0))
+      draw_map(screen, stage_data, chip_s)
+      reimu.update()
+      for enemy in enemy_list:
+        enemy.move_toward(reimu.pos, stage_data)
+
+      # 衝突判定
+      for enemy in enemy_list:
+        if reimu.rect.colliderect(enemy.rect) and not reimu.invincible:
+          player_lives -= 1
+          reimu.invincible = True
+          reimu.invincible_timer = 60
+          print(f"敵にぶつかりました！残りライフ: {player_lives}")
+          if player_lives <= 0:
+            game_state = "game_over"
+            print("ライフが尽きました！ゲームオーバー")
+
+      # ゴール達成判定
+      goal_count = check_goal_collision(reimu.rect, goals, goal_count)
+      if goal_count == 0:
+          game_state = "game_clear"
+      if player_lives <= 0 and game_state == "playing":
+        game_state = "game_over"
+
+      # 描画更新
+      draw_fixed_info(screen, score, player_lives,goal_items_collected, reimu, frame)
+      pg.display.flip()
+
+    elif game_state == "game_over":
+      # ゲームオーバー画面
+      game_over_text = font.render("Game Over!", True, (255, 0, 0))
+      restart_text = font.render(
+              "Press R to Restart or Q to Quit", True, (255, 255, 255))
+      screen.blit(game_over_text, (disp_w // 2 - 100, disp_h // 2 - 50))
+      screen.blit(restart_text, (disp_w // 2 - 150, disp_h // 2 + 20))
+      pg.display.flip()
+
+    elif game_state == "game_clear":
+      # ゲームクリア画面
+      game_clear_text = font.render("Game Clear!", True, (0, 255, 0))
+      next_stage_text = font.render(
+              "Press R to Restart or Q to Quit", True, (255, 255, 255))
+      screen.blit(game_clear_text, (disp_w // 2 - 100, disp_h // 2 - 50))
+      screen.blit(next_stage_text, (disp_w // 2 - 150, disp_h // 2 + 20))
+      pg.display.flip()
+
+    clock.tick(30)
 
     # ゲーム進行
-    screen.fill((0, 0, 0))  # 背景の描画
+    #screen.fill((0, 0, 0))  # 背景の描画
     draw_map(screen, stage_data, chip_s)  # ステージマップを描画
     reimu.rect.topleft = reimu.get_dp()  # プレイヤーの位置を更新
     screen.blit(reimu.get_img(frame), reimu.rect.topleft)  # プレイヤーの画像を描画
@@ -494,14 +452,6 @@ def main():
     if player_tile_pos in items:
       items.remove(player_tile_pos)  # アイテムを削除
 
-    # 敵の移動処理
-    directions = {
-      0: pg.Vector2(0, -1),  # 上
-      1: pg.Vector2(1, 0),   # 右
-      2: pg.Vector2(0, 1),   # 下
-      3: pg.Vector2(-1, 0),  # 左
-    }
-
     # 穴に落ちて埋まる判定
     player_x, player_y = int(reimu.pos.x), int(reimu.pos.y)
     below_player = stage_data[player_y +
@@ -527,9 +477,6 @@ def main():
         screen.blit(font.render("次のステージ(N) / 再スタート(R)",
                     True, (255, 255, 255)), (250, 300))
 
-    for enemy in enemy_list:
-      enemy.move_toward(reimu.pos, stage_data, directions)
-
     # メインループ内で呼び出す処理
     goal_count = check_goal_collision(reimu.rect, goals, goal_count)
 
@@ -538,6 +485,8 @@ def main():
 
     # 敵キャラクターの描画
     for enemy in enemy_list:
+      enemy.move_toward(reimu.pos, stage_data)
+      enemy.update()  # その他の更新処理（アニメーションなど）
       screen.blit(enemy.get_img(frame), enemy.get_dp())
 
     # フレームカウンタの描画
@@ -554,7 +503,7 @@ def main():
     collected_goals = handle_goal_progress(reimu.pos, goal_positions)
 
     # 固定情報の描画
-    draw_fixed_info(screen, score, player_lives, collected_goals)
+    draw_fixed_info(screen, score, player_lives, collected_goals,reimu,frame)
 
     # ゴールの描画
     goals.draw(screen)
@@ -565,9 +514,6 @@ def main():
     # スコアやライフが条件を満たしたらゲームオーバー
     if player_lives <= 0:
         game_over = True
-
-    # 固定位置に情報を描画
-    draw_fixed_info(screen, score, player_life, goal_count)
 
     score = handle_collisions(reimu.rect, goals, score)
     if len(goals) == 0:  # 全ゴールを達成した場合
