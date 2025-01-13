@@ -51,4 +51,6 @@ class PlayerCharacter:
           return  # 点滅中は描画しない
       surface.blit(self.image, self.rect)
 
+  
+
 # PlayerCharacterクラスの定義 [ここまで]

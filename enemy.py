@@ -25,30 +25,30 @@ class EnemyCharacter:
         self.rect.topleft = self.get_dp()
 
     def is_on_ground(self, stage_data):
-      """
-      現在の位置の下に地面があるかを判定。
-      """
-      tile_x = int(self.pos.x)
-      tile_y = int(self.pos.y + 1)  # 下のタイルを確認
-      if 0 <= tile_y < len(stage_data) and 0 <= tile_x < len(stage_data[0]):
-        return stage_data[tile_y][tile_x] == "="  # 地面の記号
-      return False
+        """
+        現在の位置の下に地面か梯子があるかを判定。
+        """
+        tile_x = int(self.pos.x)
+        tile_y = int(self.pos.y + 1)  # 下のタイルを確認
+        if 0 <= tile_y < len(stage_data) and 0 <= tile_x < len(stage_data[0]):
+            return stage_data[tile_y][tile_x] in ["=", "L"]  # 地面か梯子の上にいる
+        return False
 
     def move(self, player_pos, stage_data):
-      """
-      敵の移動処理。
-      """
-      directions = {
-          0: (0, -self.move_speed),  # 上
-          1: (self.move_speed, 0),  # 右
-          2: (0, self.move_speed),  # 下
-          3: (-self.move_speed, 0),  # 左
-      }
+        """
+        敵の移動処理。
+        """
+        directions = {
+            0: (0, -self.move_speed),  # 上
+            1: (self.move_speed, 0),  # 右
+            2: (0, self.move_speed),  # 下
+            3: (-self.move_speed, 0),  # 左
+        }
 
-      if not self.is_on_ground(stage_data):
-        # 地面がない場合は方向を変える
-        self.dir = (self.dir + 2) % 4  # 反対方向に切り替え
-      else:
+        if not self.is_on_ground(stage_data):
+            # 空中にいる場合は移動できない
+            return
+
         dx, dy = directions[self.dir]
         new_x = self.pos.x + dx
         new_y = self.pos.y + dy
@@ -60,15 +60,38 @@ class EnemyCharacter:
             # 障害物がある場合は方向をランダムに変更
             self.dir = random.choice([0, 1, 2, 3])
 
-    def move_toward(self, player_pos, stage_data):
-      # プレイヤーの現在位置と敵の位置をもとに移動処理
-      direction = player_pos - self.pos  # プレイヤーへの方向を計算
-      direction = direction.normalize()  # ベクトルの正規化
-      new_pos = self.pos + direction  # 新しい位置を計算
+    def move_toward(self, player_pos, stage_data,ladder_rect=None):
+        """
+        プレイヤーの現在位置と敵の位置をもとに移動処理。
+        ただし、移動先が地面または梯子がある場合にのみ移動する。
+        """
+      # プレイヤーの位置と敵の位置の差を求める
+        direction = player_pos - self.pos
 
-      # 新しい位置が移動可能かを確認（例：壁や障害物がないか）
-      if stage_data[int(new_pos.y)][int(new_pos.x)] != "#":  # "#"は壁
-        self.pos = new_pos  # 移動可能なら新しい位置に更新
+      # X軸方向の移動量
+        if direction.x > 0:  # プレイヤーが右側
+          move_x = self.move_speed
+        elif direction.x < 0:  # プレイヤーが左側
+          move_x = -self.move_speed
+        else:
+          move_x = 0  # プレイヤーと同じX軸にいる場合は移動しない
+
+        # Y軸方向の移動量
+        if direction.y > 0:  # プレイヤーが下側
+          move_y = self.move_speed
+        elif direction.y < 0:  # プレイヤーが上側
+          move_y = -self.move_speed
+        else:
+          move_y = 0  # プレイヤーと同じY軸にいる場合は移動しない
+
+        # 移動後の新しい位置を計算
+        new_x = self.pos.x + move_x
+        new_y = self.pos.y + move_y
+
+        # 新しい位置が移動可能かを確認
+        # 障害物のチェックと移動可能かどうかを確認
+        if not self.is_obstacle(new_x, new_y, stage_data) and (self.is_on_ground(stage_data) or (ladder_rect and self.rect.colliderect(ladder_rect))):
+          self.rect.x, self.rect.y = new_x, new_y
 
     def is_obstacle(self, x, y, stage_data):
         """
@@ -76,22 +99,22 @@ class EnemyCharacter:
         """
         tile_x = int(x)
         tile_y = int(y)
-        if stage_data[tile_y][tile_x] in ["#", "="]:  # 壁や障害物の記号
+        if stage_data[tile_y][tile_x] in ["#", "="]:  # 壁や地面の記号
             return True
         return False
 
     def move_up_ladder(self, ladder_rect):
-      # 梯子に接触したら、梯子上を移動するロジック
-      if self.rect.colliderect(ladder_rect):
-        self.rect.y -= 2  # 梯子を登るためにy座標を減らす
+        # 梯子に接触したら、梯子上を移動するロジック
+        if self.rect.colliderect(ladder_rect):
+            self.rect.y -= 2  # 梯子を登るためにy座標を減らす
 
     def update(self):
-      """
-      敵の描画と位置を更新。
-      """
-      self.rect.topleft = self.get_dp()  # 新しい位置を反映
-      frame = pg.time.get_ticks() // 100
-      self.image = self.get_img(frame)
+        """
+        敵の描画と位置を更新。
+        """
+        self.rect.topleft = self.get_dp()  # 新しい位置を反映
+        frame = pg.time.get_ticks() // 100
+        self.image = self.get_img(frame)
 
     def get_dp(self):
         return (self.pos.x * 48, self.pos.y * 64)

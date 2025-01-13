@@ -2,24 +2,10 @@ import pygame as pg
 from player import PlayerCharacter
 from enemy import EnemyCharacter
 from goal import Goal
+from setting import draw_map, stage_data ,load_image
 
-# 画像の読み込み関数
-def load_image(path, size=None):
-    try:
-        img = pg.image.load(path)
-        if size:
-            img = pg.transform.scale(img, size)
-        return img
-    except pg.error as e:
-        print(f"Error loading image {path}: {e}")
-        return None
-
-# 画像の読み込み
-wall_img = load_image('./data/img/wall.png', (32, 32))  # サイズを変更して読み込む
-ladder_img = load_image('./data/img/ladder.png', (32, 32))
-rope_img = load_image('./data/img/rope.png', (32, 32))
-ground_img = load_image('./data/img/ground.png', (32, 32))
 life_icon = load_image('./data/img/life_icon.png',(32, 32))  
+item_icon = load_image('./data/img/item_icon.png',(32,32))
 
 # Pygameの初期化
 pg.init()
@@ -66,19 +52,6 @@ def handle_goal_progress(player_pos, goal_positions):
             collected_goals += 1
     return collected_goals
 
-def draw_map(screen, stage_data, chip_s):
-    for y, row in enumerate(stage_data):
-        for x, cell in enumerate(row):
-            rect = (x * chip_s, y * chip_s, chip_s, chip_s)
-            if cell == "#":  # 壁
-                screen.blit(wall_img, rect)  # 壁の画像を描画
-            elif cell == "L":  # 階段
-                screen.blit(ladder_img, rect)  # 階段の画像を描画
-            elif cell == "-":  # ロープ
-                screen.blit(rope_img, rect)  # ロープの画像を描画
-            elif cell == "=":  # 地面
-                screen.blit(ground_img, rect)  # 地面の画像を描画
-
 def destroy_tile_by_key(player_pos, direction, stage_data, broken_tiles, respawn_time=300):
     """
     プレイヤーの左右の地面を壊す処理。
@@ -99,7 +72,7 @@ def destroy_tile_by_key(player_pos, direction, stage_data, broken_tiles, respawn
             # 壊れたタイルの情報を記録（復活時間を設定）
             broken_tiles.append((x, y, respawn_time))
 
-# 画面更新の際、情報を固定位置に描画する関数を作成
+#画面更新の際、情報を固定位置に描画する関数を作成
 def draw_fixed_info(surface, score, life, goal_count,reimu,frame):
   # ライフ表示（左上）
   life_text_color = (255, 0, 0) if life <= 1 else (255, 255, 255)
@@ -178,32 +151,59 @@ def check_game_clear():
         return True
     return False
 
-#ステージ要素
-stage_data = [
-    "########################################",
-    "#                                      #",
-    "#     L=====================L          #",
-    "#     L                     L          #",
-    "#     L                     LL         #",
-    "#========L===========        L=========#",
-    "#        L                 L           #",
-    "#        L                 L           #",
-    "#  L=====L==========L   ====L==========#",
-    "#  L                L                  #",
-    "#  L                L                  #",
-    "#  L     L=====     L     ====L        #",
-    "#  L     L          L         L        #",
-    "#  L     L          L         LL       #",
-    "#  L=====L     =====L=====     L=======#",
-    "#  L                                  L#",
-    "#  L                                  L#",
-    "#  ====================================#",
-    "#                                      #",
-    "########################################",
-]
+def draw_game_elements(screen, stage_data, chip_s, reimu, enemies, items, frame):
+    """ゲーム内の全要素を描画する関数"""
+    # ステージ描画
+    draw_map(screen, stage_data, chip_s)
+
+    # プレイヤー描画
+    screen.blit(reimu.get_img(frame), reimu.rect.topleft)
+
+    # 敵描画
+    for enemy in enemies:
+        screen.blit(enemy.get_img(frame), enemy.rect.topleft)
+
+    # アイテム描画
+    for item in items:
+        item_rect = pg.Rect(item[0] * chip_s, item[1] * chip_s, chip_s, chip_s)
+        screen.blit(item_icon, item_rect)
+
+# キー入力関連の処理を関数化
+def handle_keydown(event, reimu, stage_data, broken_tiles):
+    """
+    キー押下時の処理を管理。
+    """
+    global goal_items_collected, lives, MAX_LIVES
+
+    if event.key == pg.K_a:  # Aキーで左側の地面を壊す
+        destroy_tile_by_key(reimu.pos, -1, stage_data, broken_tiles)
+    elif event.key == pg.K_d:  # Dキーで右側の地面を壊す
+        destroy_tile_by_key(reimu.pos, 1, stage_data, broken_tiles)
+    elif event.key == pg.K_n and check_game_clear():
+        # 次のステージ
+        goal_items_collected = 0
+        lives = MAX_LIVES
+    elif event.key == pg.K_r and check_game_clear():
+        # ゲームをリスタート
+        goal_items_collected = 0
+        lives = MAX_LIVES
+
+def get_movement_command(key_state):
+    """
+    移動コマンドを返す関数。
+    """
+    if key_state[pg.K_UP]:
+        return 0
+    elif key_state[pg.K_RIGHT]:
+        return 1
+    elif key_state[pg.K_DOWN]:
+        return 2
+    elif key_state[pg.K_LEFT]:
+        return 3
+    return -1
 
 # アイテムの位置リスト
-items = [(3, 4), (7, 5), (10, 15), (12, 18), (15, 10), (20, 8)]
+items = [(3, 4), (7, 7), (10, 16), (12, 16), (13, 10), (20, 7)]
 goal_positions = [(3, 4), (7, 5), (10, 15), (12, 18)]  # ゴールアイテムの位置
 goal_count = handle_goal_progress(player_pos, goal_positions)  # ゴール進捗の更新
 
@@ -220,7 +220,6 @@ MAX_LIVES = 3
 GOAL_ITEM_COUNT = 10
 lives = MAX_LIVES
 game_state = "playing"  # 初期状態はゲーム中
-
 
 def main():
   global game_state, player_lives, goal_items_collected, stage
@@ -255,8 +254,6 @@ def main():
   enemy_list = [
     EnemyCharacter((6, 3), './data/img/enemy.png'),  # プレイヤーの近く
     EnemyCharacter((10, 6), './data/img/enemy.png'), # ステージ中盤
-    EnemyCharacter((15, 15), './data/img/enemy.png'), # 遠い場所
-    EnemyCharacter((18, 10), './data/img/enemy.png'), # 別ルート上
   ]
 
 #ステージ要素の描画設定
@@ -287,6 +284,19 @@ def main():
   player_lives = 3
   game_clear = False
   game_clear_time = 0
+  # 定数の設定
+  MOVE_COOLDOWN = 6400  # ミリ秒単位で移動のクールダウン時間を設定
+
+  # グローバルまたはクラス内変数
+  last_move_time = 0  # 最後に移動した時間を記録
+
+  # 初期化時に背景を描画してキャッシュ
+  background_surface = pg.Surface((disp_w, disp_h))
+  background_surface.fill((0, 0, 0))  # 背景色を設定
+  for x in range(0, disp_w, chip_s):  # 縦線
+    pg.draw.line(background_surface, grid_c, (x, 0), (x, disp_h))
+  for y in range(0, disp_h, chip_s):  # 横線
+    pg.draw.line(background_surface, grid_c, (0, y), (disp_w, y))
 
   # ゲームループ
   while not exit_flag:
@@ -331,7 +341,7 @@ def main():
       draw_map(screen, stage_data, chip_s)
       reimu.update()
       for enemy in enemy_list:
-        enemy.move_toward(reimu.pos, stage_data)
+        enemy.move_toward(reimu.pos, stage_data,ladder_rect=None)
 
       # 衝突判定
       for enemy in enemy_list:
@@ -353,7 +363,6 @@ def main():
 
       # 描画更新
       draw_fixed_info(screen, score, player_lives,goal_items_collected, reimu, frame)
-      pg.display.flip()
 
     elif game_state == "game_over":
       # ゲームオーバー画面
@@ -362,7 +371,6 @@ def main():
               "Press R to Restart or Q to Quit", True, (255, 255, 255))
       screen.blit(game_over_text, (disp_w // 2 - 100, disp_h // 2 - 50))
       screen.blit(restart_text, (disp_w // 2 - 150, disp_h // 2 + 20))
-      pg.display.flip()
 
     elif game_state == "game_clear":
       # ゲームクリア画面
@@ -371,15 +379,10 @@ def main():
               "Press R to Restart or Q to Quit", True, (255, 255, 255))
       screen.blit(game_clear_text, (disp_w // 2 - 100, disp_h // 2 - 50))
       screen.blit(next_stage_text, (disp_w // 2 - 150, disp_h // 2 + 20))
-      pg.display.flip()
-
-    clock.tick(30)
 
     # ゲーム進行
-    #screen.fill((0, 0, 0))  # 背景の描画
-    draw_map(screen, stage_data, chip_s)  # ステージマップを描画
+    screen.blit(background_surface, (0, 0))
     reimu.rect.topleft = reimu.get_dp()  # プレイヤーの位置を更新
-    screen.blit(reimu.get_img(frame), reimu.rect.topleft)  # プレイヤーの画像を描画
 
     # システムイベントの検出
     cmd_move = -1
@@ -387,39 +390,30 @@ def main():
       if event.type == pg.QUIT:  # ウィンドウ[X]の押下
         exit_flag = True
         exit_code = '001'
-      # 移動操作の「キー入力」の受け取り処理
-      if event.type == pg.KEYDOWN:
-        if event.key == pg.K_UP:
-          cmd_move = 0
-        elif event.key == pg.K_RIGHT:
-          cmd_move = 1
-        elif event.key == pg.K_DOWN:
-          cmd_move = 2
-        elif event.key == pg.K_LEFT:
-          cmd_move = 3
-        elif event.key == pg.K_a:  # Aキーで左側の地面を壊す
-          destroy_tile_by_key(reimu.pos, -1, stage_data, broken_tiles)
-        elif event.key == pg.K_d:  # Dキーで右側の地面を壊す
-          destroy_tile_by_key(reimu.pos, 1, stage_data, broken_tiles)
-        elif event.key == pg.K_n and check_game_clear():
-          # 次のステージ
-          goal_items_collected = 0
-          lives = MAX_LIVES
-        elif event.key == pg.K_r and check_game_clear():
-          # ゲームをリスタート
-          goal_items_collected = 0
-          lives = MAX_LIVES
+      elif event.type == pg.KEYDOWN:
+        # キー押下時の処理
+        handle_keydown(event, reimu, stage_data, broken_tiles)
+      
+    # キー入力の状態を取得して移動コマンドを更新
+    key = pg.key.get_pressed()
+    cmd_move = get_movement_command(key)
 
-    # グリッド
-    for x in range(0, disp_w, chip_s):  # 縦線
-      pg.draw.line(screen, grid_c, (x, 0), (x, disp_h))
-    for y in range(0, disp_h, chip_s):  # 横線
-      pg.draw.line(screen, grid_c, (0, y), (disp_w, y))
-
-    # アイテムの描画
-    for item in items:
-      item_rect = pg.Rect(item[0] * chip_s, item[1] *chip_s, chip_s, chip_s)  # 画像を描画する位置
-      screen.blit(item_icon, item_rect)  # 画像を描画
+    # 移動可能かチェック
+    if cmd_move - last_move_time > MOVE_COOLDOWN:
+        if key[pg.K_UP]:
+            cmd_move = 0
+            last_move_time = cmd_move  # 最後の移動時間を更新
+        elif key[pg.K_RIGHT]:
+            cmd_move = 1
+            last_move_time = cmd_move
+        elif key[pg.K_DOWN]:
+            cmd_move = 2
+            last_move_time = cmd_move
+        elif key[pg.K_LEFT]:
+            cmd_move = 3
+            last_move_time = cmd_move
+        else:
+            cmd_move = -1  # キーが押されていない場合
 
     if cmd_move != -1:  # 有効な移動コマンドがある場合
       af_pos = reimu.pos + m_vec[cmd_move]  # 仮の移動先座標
@@ -445,7 +439,6 @@ def main():
     if 0 <= af_pos.y < map_s.y:  # 範囲内チェック
       if stage_data[int(af_pos.y)][int(reimu.pos.x)] == " ":  # 下が空間の場合
         reimu.move_to(pg.Vector2(0, 1))  # 自動で落下
-
 
     # アイテムの収集判定
     player_tile_pos = (int(reimu.pos.x), int(reimu.pos.y))
@@ -483,12 +476,6 @@ def main():
     # 自キャラの描画
     screen.blit(reimu.get_img(frame), reimu.get_dp())
 
-    # 敵キャラクターの描画
-    for enemy in enemy_list:
-      enemy.move_toward(reimu.pos, stage_data)
-      enemy.update()  # その他の更新処理（アニメーションなど）
-      screen.blit(enemy.get_img(frame), enemy.get_dp())
-
     # フレームカウンタの描画
     frame += 1
     frm_str = f'{frame:05}'
@@ -501,9 +488,6 @@ def main():
 
     # ゲームループ内で進捗を更新
     collected_goals = handle_goal_progress(reimu.pos, goal_positions)
-
-    # 固定情報の描画
-    draw_fixed_info(screen, score, player_lives, collected_goals,reimu,frame)
 
     # ゴールの描画
     goals.draw(screen)
@@ -522,6 +506,12 @@ def main():
 
     # ステージ情報表示
     display_message(f"ステージ: {stage}", (0, 255, 0), -100)  # (0, 255, 0) は緑色
+
+    # ゲームループ内の描画部分
+    draw_game_elements(screen, stage_data, chip_s, reimu, enemy_list, items, frame)
+
+    # 固定情報の描画
+    draw_fixed_info(screen, score, player_lives, collected_goals, reimu, frame)
 
     # 画面の更新
     pg.display.flip()

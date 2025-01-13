@@ -1,13 +1,17 @@
 import pygame as pg
 
-# PlayerCharacterクラスの定義 [ここから]
+# 初期化・グローバル変数
+# PlayerCharacter と main の両方から参照する変数
+scale_factor = 4
+chip_s = int(24 * scale_factor)  # マップチップ基本サイズ
 
+# PlayerCharacterクラスの定義
 class PlayerCharacter:
 
   # コンストラクタ
   def __init__(self, init_pos, img_path):
     self.pos = pg.Vector2(init_pos)
-    self.size = pg.Vector2(48, 64)
+    self.size = pg.Vector2(24, 32) * scale_factor
     self.dir = 2
     img_raw = pg.image.load(img_path)
     self.__img_arr = []
@@ -27,21 +31,18 @@ class PlayerCharacter:
     self.pos += vec
 
   def get_dp(self):
-    return self.pos * 48 - pg.Vector2(0, 24)
+    return self.pos * chip_s - pg.Vector2(0, 12) * scale_factor
 
   def get_img(self, frame):
     return self.__img_arr[self.dir][frame // 6 % 4]
 
-# PlayerCharacterクラスの定義 [ここまで]
-
+# ゲームループを含むメイン処理
 def main():
 
   # 初期化処理
-  chip_s = 48  # マップチップの基本サイズ
-  map_s = pg.Vector2(16, 9)  # マップの横・縦の配置数
-
   pg.init()
   pg.display.set_caption('ぼくのかんがえたさいきょうのげーむ II')
+  map_s = pg.Vector2(16, 9)     # マップの横・縦の配置数
   disp_w = int(chip_s * map_s.x)
   disp_h = int(chip_s * map_s.y)
   screen = pg.display.set_mode((disp_w, disp_h))
@@ -77,13 +78,13 @@ def main():
         exit_code = '001'
       # 移動操作の「キー入力」の受け取り処理
       if event.type == pg.KEYDOWN:
-        if event.key == pg.K_UP:
+        if event.key == pg.K_w:
           cmd_move = 0
-        elif event.key == pg.K_RIGHT:
+        elif event.key == pg.K_d:
           cmd_move = 1
-        elif event.key == pg.K_DOWN:
+        elif event.key == pg.K_s:
           cmd_move = 2
-        elif event.key == pg.K_LEFT:
+        elif event.key == pg.K_a:
           cmd_move = 3
 
     # 背景描画
