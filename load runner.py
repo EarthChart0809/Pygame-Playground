@@ -2,7 +2,8 @@ import pygame as pg
 from player import PlayerCharacter
 from enemy import EnemyCharacter
 from goal import Goal
-from setting import draw_map, stage_data ,load_image
+from setting import draw_map, stage_data ,load_image, get_settings
+from home_screen import display_home, handle_home_events
 
 life_icon = load_image('./data/img/life_icon.png',(32, 32))  
 item_icon = load_image('./data/img/item_icon.png',(32,32))
@@ -168,6 +169,13 @@ def draw_game_elements(screen, stage_data, chip_s, reimu, enemies, items, frame)
         item_rect = pg.Rect(item[0] * chip_s, item[1] * chip_s, chip_s, chip_s)
         screen.blit(item_icon, item_rect)
 
+    # フレームカウンタの描画
+    frame += 1
+    frm_str = f'{frame:05}'
+    screen.blit(font.render(frm_str, True, 'BLACK'), (10, 10))
+    screen.blit(font.render(f'{reimu.pos}', True, 'BLACK'), (10, 20))
+
+
 # キー入力関連の処理を関数化
 def handle_keydown(event, reimu, stage_data, broken_tiles):
     """
@@ -201,6 +209,24 @@ def get_movement_command(key_state):
     elif key_state[pg.K_LEFT]:
         return 3
     return -1
+
+# ゲームオーバー画面の描画
+def draw_game_over_screen(screen):
+    font = pg.font.Font(None, 48)
+    text = font.render("Game Over!", True, (255, 0, 0))
+    restart_text = font.render(
+        "Press R to Restart or Q to Quit", True, (255, 255, 255))
+    screen.blit(text, (200, 200))
+    screen.blit(restart_text, (200, 300))
+
+# ゲームクリア画面の描画
+def draw_game_clear_screen(screen):
+    font = pg.font.Font(None, 48)
+    text = font.render("Congratulations!", True, (0, 255, 0))
+    next_stage_text = font.render(
+        "Press R to Restart or Q to Quit", True, (255, 255, 255))
+    screen.blit(text, (200, 200))
+    screen.blit(next_stage_text, (200, 300))
 
 # アイテムの位置リスト
 items = [(3, 4), (7, 7), (10, 16), (12, 16), (13, 10), (20, 7)]
@@ -239,6 +265,18 @@ def main():
 
   # グリッド設定
   grid_c = '#dddddd'  # 薄いグレー
+
+  # ホーム画面の表示
+  difficulty = None
+  while difficulty is None:
+        buttons = display_home(screen)
+        difficulty = handle_home_events(buttons)
+
+  print(f"選択された難易度: {difficulty}")
+
+    # 難易度ごとの設定を取得
+  settings = get_settings(difficulty)
+  print(f"設定: {settings}")
 
   # 自キャラ移動関連
   cmd_move = -1  # 移動コマンドの管理変数
@@ -333,6 +371,9 @@ def main():
           elif event.key == pg.K_q and game_state in ["game_over", "game_clear"]:
               # ゲーム終了
               exit_flag = True
+          elif event.type == pg.KEYDOWN:
+            # キー押下時の処理
+            handle_keydown(event, reimu, stage_data, broken_tiles)
 
     # ゲームの状態に応じた処理
     if game_state == "playing":
@@ -340,8 +381,9 @@ def main():
       screen.fill((0, 0, 0))
       draw_map(screen, stage_data, chip_s)
       reimu.update()
+
       for enemy in enemy_list:
-        enemy.move_toward(reimu.pos, stage_data,ladder_rect=None)
+        enemy.move_toward(reimu.pos, stage_data)
 
       # 衝突判定
       for enemy in enemy_list:
@@ -365,20 +407,10 @@ def main():
       draw_fixed_info(screen, score, player_lives,goal_items_collected, reimu, frame)
 
     elif game_state == "game_over":
-      # ゲームオーバー画面
-      game_over_text = font.render("Game Over!", True, (255, 0, 0))
-      restart_text = font.render(
-              "Press R to Restart or Q to Quit", True, (255, 255, 255))
-      screen.blit(game_over_text, (disp_w // 2 - 100, disp_h // 2 - 50))
-      screen.blit(restart_text, (disp_w // 2 - 150, disp_h // 2 + 20))
+      draw_game_over_screen(screen)
 
     elif game_state == "game_clear":
-      # ゲームクリア画面
-      game_clear_text = font.render("Game Clear!", True, (0, 255, 0))
-      next_stage_text = font.render(
-              "Press R to Restart or Q to Quit", True, (255, 255, 255))
-      screen.blit(game_clear_text, (disp_w // 2 - 100, disp_h // 2 - 50))
-      screen.blit(next_stage_text, (disp_w // 2 - 150, disp_h // 2 + 20))
+      draw_game_clear_screen(screen)
 
     # ゲーム進行
     screen.blit(background_surface, (0, 0))
@@ -386,13 +418,6 @@ def main():
 
     # システムイベントの検出
     cmd_move = -1
-    for event in pg.event.get():
-      if event.type == pg.QUIT:  # ウィンドウ[X]の押下
-        exit_flag = True
-        exit_code = '001'
-      elif event.type == pg.KEYDOWN:
-        # キー押下時の処理
-        handle_keydown(event, reimu, stage_data, broken_tiles)
       
     # キー入力の状態を取得して移動コマンドを更新
     key = pg.key.get_pressed()
@@ -476,12 +501,6 @@ def main():
     # 自キャラの描画
     screen.blit(reimu.get_img(frame), reimu.get_dp())
 
-    # フレームカウンタの描画
-    frame += 1
-    frm_str = f'{frame:05}'
-    screen.blit(font.render(frm_str, True, 'BLACK'), (10, 10))
-    screen.blit(font.render(f'{reimu.pos}', True, 'BLACK'), (10, 20))
-
     # ゲームループ内での進捗表示
     collected_goals = 0  # プレイヤーが収集したゴールアイテムの数
     goal_positions = [(3, 4), (6, 7)]  # ゴールアイテムの位置（例）
@@ -512,6 +531,8 @@ def main():
 
     # 固定情報の描画
     draw_fixed_info(screen, score, player_lives, collected_goals, reimu, frame)
+
+    pg.display.update()
 
     # 画面の更新
     pg.display.flip()

@@ -53,3 +53,13 @@ stage_data = [
     "#  ==================================#",
     "######################################",
 ]
+
+def get_settings(difficulty):
+    if difficulty == "Easy":
+        return {"enemy_speed": 2, "player_lives": 5}
+    elif difficulty == "Normal":
+        return {"enemy_speed": 4, "player_lives": 3}
+    elif difficulty == "Hard":
+        return {"enemy_speed": 6, "player_lives": 1}
+    else:
+        raise ValueError("Unknown difficulty")
