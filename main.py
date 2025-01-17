@@ -290,8 +290,8 @@ def main():
   # 自キャラの生成・初期化
   reimu = PlayerCharacter((2, 3), './data/img/reimu.png')
   enemy_list = [
-    EnemyCharacter((6, 3), './data/img/enemy.png'),  # プレイヤーの近く
-    EnemyCharacter((10, 6), './data/img/enemy.png'), # ステージ中盤
+    EnemyCharacter((5*32, 4*32), './data/img/enemy.png'),  # プレイヤーの近く
+    EnemyCharacter((10*32, 6*32), './data/img/enemy.png'), # ステージ中盤
   ]
 
 #ステージ要素の描画設定
@@ -322,8 +322,9 @@ def main():
   player_lives = 3
   game_clear = False
   game_clear_time = 0
+
   # 定数の設定
-  MOVE_COOLDOWN = 6400  # ミリ秒単位で移動のクールダウン時間を設定
+  MOVE_COOLDOWN = 12800  # ミリ秒単位で移動のクールダウン時間を設定
 
   # グローバルまたはクラス内変数
   last_move_time = 0  # 最後に移動した時間を記録
@@ -338,18 +339,6 @@ def main():
 
   # ゲームループ
   while not exit_flag:
-    # プレイヤーと敵の衝突判定
-    for enemy in enemy_list:
-      # 無敵状態でない場合のみライフを減らす
-      if reimu.rect.colliderect(enemy.rect) and not reimu.invincible:
-        player_lives -= 1  # ライフを1減少
-        reimu.invincible = True  # 無敵状態をオン
-        reimu.invincible_timer = 60  # 無敵状態の持続時間（例: 60フレーム = 2秒程度）
-        print(f"敵にぶつかりました！残りライフ: {player_lives}")
-        if player_lives <= 0:
-            game_state = "game_over"
-            print("ライフが尽きました！ゲームオーバー")
-
     # 穴に落ちて埋まる判定
     player_x, player_y = int(reimu.pos.x), int(reimu.pos.y)
     if stage_data[player_y + 1][player_x] == "=" and stage_data[player_y][player_x] == "#":
@@ -382,16 +371,27 @@ def main():
       draw_map(screen, stage_data, chip_s)
       reimu.update()
 
-      for enemy in enemy_list:
-        enemy.move_toward(reimu.pos, stage_data)
+      # タイルの幅と高さを計算
+      tile_width = SCREEN_WIDTH / len(stage_data[0])  # 1タイルの幅
+      tile_height = SCREEN_HEIGHT / len(stage_data)  # 1タイルの高さ
 
-      # 衝突判定
       for enemy in enemy_list:
+        # 敵の移動処理（プレイヤーを追いかける）
+        enemy.move(reimu.pos, stage_data, (len(stage_data[0]), len(stage_data)))
+    
+        # 敵の更新処理
+        enemy.update(reimu.rect, stage_data, (tile_width, tile_height))
+
+        # 敵を描画
+        screen.blit(enemy.image, enemy.rect.topleft)
+
+        # プレイヤーと敵の接触判定
         if reimu.rect.colliderect(enemy.rect) and not reimu.invincible:
-          player_lives -= 1
-          reimu.invincible = True
-          reimu.invincible_timer = 60
+          player_lives -= 1  # ライフを1減少
+          reimu.invincible = True  # 無敵状態をオン
+          reimu.invincible_timer = 60  # 無敵状態の持続時間（例: 60フレーム）
           print(f"敵にぶつかりました！残りライフ: {player_lives}")
+
           if player_lives <= 0:
             game_state = "game_over"
             print("ライフが尽きました！ゲームオーバー")
@@ -538,7 +538,7 @@ def main():
     pg.display.flip()
 
     # FPS制御
-    clock.tick(30)  # 30 FPSに制限
+    clock.tick(60)  # 30 FPSに制限
 
   # ゲームループ [ここまで]
   pg.quit()
