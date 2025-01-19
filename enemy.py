@@ -25,6 +25,8 @@ class EnemyCharacter:
         self.image = self.__img_arr[0][0]
         self.rect = self.image.get_rect()
         self.rect.topleft = self.get_dp()
+        self.gravity = 0.5  # 重力の強さを設定
+        self.velocity = pg.Vector2(0, 0)  # 速度ベクトルを追加
 
         #print(f"Enemy initialized at {self.pos}")  # デバッグ用
 
@@ -124,17 +126,17 @@ class EnemyCharacter:
         player_tile_y = int(player_pos[1] // tile_height)
 
         # ログ: 現在位置とプレイヤー位置
-        print(f"Ladder detected. Current tile: ({current_tile_x}, {current_tile_y}), Player tile: ({player_tile_x}, {player_tile_y})")
+        #print(f"Ladder detected. Current tile: ({current_tile_x}, {current_tile_y}), Player tile: ({player_tile_x}, {player_tile_y})")
         
         # 範囲外チェック
         if not (0 <= current_tile_x < len(stage_data[0])) or not (0 <= current_tile_y < len(stage_data)):
-          print(f"Out of bounds: ({current_tile_x}, {current_tile_y})")
+          #print(f"Out of bounds: ({current_tile_x}, {current_tile_y})")
           return
 
         # 現在のタイルが梯子か確認
         current_tile = stage_data[current_tile_y][current_tile_x]
         if current_tile != "L":
-          print(f"Enemy is not on a ladder: Tile data at ({current_tile_x}, {current_tile_y}) = {current_tile}")
+          #print(f"Enemy is not on a ladder: Tile data at ({current_tile_x}, {current_tile_y}) = {current_tile}")
           return
 
         # プレイヤーの位置による上下移動
@@ -146,23 +148,22 @@ class EnemyCharacter:
           direction = "down"
         else:
           # 同じタイル上ならその場で待機
-          print("Player is on the same tile as the enemy. No movement required.")
+          #print("Player is on the same tile as the enemy. No movement required.")
           return
 
         # 範囲外チェック
         if not (0 <= target_tile_y < len(stage_data)):
-          print(f"Target tile out of bounds: ({current_tile_x}, {target_tile_y})")
+          #print(f"Target tile out of bounds: ({current_tile_x}, {target_tile_y})")
           return
 
         # 次のタイル情報を確認
         next_tile = stage_data[target_tile_y][current_tile_x]
-        print(f"Tile data at ({current_tile_x}, {target_tile_y}): {next_tile}")
+        #print(f"Tile data at ({current_tile_x}, {target_tile_y}): {next_tile}")
 
         # 移動処理: 次のタイルが梯子の場合
         if next_tile == "L":
           self.pos.y += (target_tile_y - current_tile_y) * tile_height
-          print(
-            f"Moved enemy {direction} to ({current_tile_x}, {target_tile_y}).")
+          #print(f"Moved enemy {direction} to ({current_tile_x}, {target_tile_y}).")
         else:print(f"No ladder found at ({current_tile_x}, {target_tile_y}). Enemy did not move.")
     
     def move_up_ladder(self, ladder_rect):
@@ -256,6 +257,15 @@ class EnemyCharacter:
         """
         敵の描画と位置を更新。
         """
+
+        # 重力の影響を受ける
+        if not self.is_on_ground():
+            self.velocity.y += self.gravity
+        else:
+            self.velocity.y = 0
+
+        self.pos += self.velocity
+
         # 地面に吸着させる
         self.adjust_to_ground()
         frame = pg.time.get_ticks() // 100

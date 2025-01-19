@@ -2,8 +2,11 @@ import pygame as pg
 from player import PlayerCharacter
 from enemy import EnemyCharacter
 from goal import Goal
-from setting import draw_map, stage_data ,load_image, get_settings
+from setting import draw_map ,load_image
 from home_screen import display_home, handle_home_events
+from setting import easy_stage, normal_stage, hard_stage
+from setting import easy_enemies, normal_enemies, hard_enemies
+from setting import easy_items, normal_items, hard_items
 
 life_icon = load_image('./data/img/life_icon.png',(32, 32))  
 item_icon = load_image('./data/img/item_icon.png',(32,32))
@@ -217,7 +220,7 @@ def draw_game_over_screen(screen):
     restart_text = font.render(
         "Press R to Restart or Q to Quit", True, (255, 255, 255))
     screen.blit(text, (200, 200))
-    screen.blit(restart_text, (200, 300))
+    screen.blit(restart_text, (300, 300))
 
 # ゲームクリア画面の描画
 def draw_game_clear_screen(screen):
@@ -227,6 +230,16 @@ def draw_game_clear_screen(screen):
         "Press R to Restart or Q to Quit", True, (255, 255, 255))
     screen.blit(text, (200, 200))
     screen.blit(next_stage_text, (200, 300))
+
+def get_settings(difficulty):
+    if difficulty == "Easy":
+        return {"stage_data": easy_stage, "enemies": easy_enemies, "items": easy_items}
+    elif difficulty == "Normal":
+        return {"stage_data": normal_stage, "enemies": normal_enemies, "items": normal_items}
+    elif difficulty == "Hard":
+        return {"stage_data": hard_stage, "enemies": hard_enemies, "items": hard_items}
+    else:
+        return {"stage_data": easy_stage, "enemies": easy_enemies, "items": easy_items}
 
 # アイテムの位置リスト
 items = [(3, 4), (7, 7), (10, 16), (12, 16), (13, 10), (20, 7)]
@@ -251,8 +264,30 @@ def main():
   global game_state, player_lives, goal_items_collected, stage
 
   # 初期化処理
+  pg.init()
   chip_s = 32  # マップチップの基本サイズ
+
+  # ホーム画面の表示
+  screen = pg.display.set_mode((800, 600))
+  difficulty = None
+  while difficulty is None:
+      buttons = display_home(screen)
+      difficulty = handle_home_events(buttons)
+
+  print(f"選択された難易度: {difficulty}")
+
+  # 難易度ごとの設定を取得
+  settings = get_settings(difficulty)
+  stage_data = settings["stage_data"]
+  print(f"設定: {settings}")
   map_s = pg.Vector2(len(stage_data[0]),len(stage_data))  # マップの横・縦の配置数
+
+  # 難易度ごとの設定を取得
+  settings = get_settings(difficulty)
+  stage_data = settings["stage_data"]
+  enemy_positions = settings["enemies"]
+  item_positions = settings["items"]
+  print(f"設定: {settings}")
 
   disp_w = int(chip_s * map_s.x)
   disp_h = int(chip_s * map_s.y)
@@ -266,18 +301,6 @@ def main():
   # グリッド設定
   grid_c = '#dddddd'  # 薄いグレー
 
-  # ホーム画面の表示
-  difficulty = None
-  while difficulty is None:
-        buttons = display_home(screen)
-        difficulty = handle_home_events(buttons)
-
-  print(f"選択された難易度: {difficulty}")
-
-    # 難易度ごとの設定を取得
-  settings = get_settings(difficulty)
-  print(f"設定: {settings}")
-
   # 自キャラ移動関連
   cmd_move = -1  # 移動コマンドの管理変数
   m_vec = [
@@ -289,10 +312,10 @@ def main():
 
   # 自キャラの生成・初期化
   reimu = PlayerCharacter((2, 3), './data/img/reimu.png')
-  enemy_list = [
-    EnemyCharacter((5*32, 4*32), './data/img/enemy.png'),  # プレイヤーの近く
-    EnemyCharacter((10*32, 6*32), './data/img/enemy.png'), # ステージ中盤
-  ]
+  enemy_list = enemy_list = [EnemyCharacter(pos, './data/img/enemy.png') for pos in enemy_positions]
+
+# アイテムの生成・初期化
+  item_list = [Goal(pos, (32,32)) for pos in item_positions]
 
 #ステージ要素の描画設定
   wall_img = pg.image.load('./data/img/wall.png')
@@ -324,7 +347,7 @@ def main():
   game_clear_time = 0
 
   # 定数の設定
-  MOVE_COOLDOWN = 12800  # ミリ秒単位で移動のクールダウン時間を設定
+  MOVE_COOLDOWN = 256  # ミリ秒単位で移動のクールダウン時間を設定
 
   # グローバルまたはクラス内変数
   last_move_time = 0  # 最後に移動した時間を記録
@@ -339,11 +362,20 @@ def main():
 
   # ゲームループ
   while not exit_flag:
+    current_time = pg.time.get_ticks()
     # 穴に落ちて埋まる判定
     player_x, player_y = int(reimu.pos.x), int(reimu.pos.y)
     if stage_data[player_y + 1][player_x] == "=" and stage_data[player_y][player_x] == "#":
         print("穴に埋まりました！ゲームオーバー")
         game_over = True
+
+    # ライフが0になった場合のゲームオーバー判定
+    if player_lives <= 0:
+        game_state = "game_over"
+
+    # ゴールアイテムをすべて収集し、ゴールに触れた場合のゲームクリア判定
+    if goal_items_collected >= GOAL_ITEM_COUNT and stage_data[player_y][player_x] == "G":
+        game_state = "game_clear"
 
     # イベント処理
     for event in pg.event.get():
@@ -360,7 +392,7 @@ def main():
           elif event.key == pg.K_q and game_state in ["game_over", "game_clear"]:
               # ゲーム終了
               exit_flag = True
-          elif event.type == pg.KEYDOWN:
+          else:
             # キー押下時の処理
             handle_keydown(event, reimu, stage_data, broken_tiles)
 
@@ -374,6 +406,11 @@ def main():
       # タイルの幅と高さを計算
       tile_width = SCREEN_WIDTH / len(stage_data[0])  # 1タイルの幅
       tile_height = SCREEN_HEIGHT / len(stage_data)  # 1タイルの高さ
+
+      # 移動のクールダウンを適用
+      if cmd_move != -1 and current_time - last_move_time > MOVE_COOLDOWN:
+          reimu.update()
+          last_move_time = current_time
 
       for enemy in enemy_list:
         # 敵の移動処理（プレイヤーを追いかける）
@@ -396,6 +433,10 @@ def main():
             game_state = "game_over"
             print("ライフが尽きました！ゲームオーバー")
 
+        # アイテムの描画
+      for item in item_list:
+                screen.blit(item.image, item.rect)
+
       # ゴール達成判定
       goal_count = check_goal_collision(reimu.rect, goals, goal_count)
       if goal_count == 0:
@@ -407,9 +448,11 @@ def main():
       draw_fixed_info(screen, score, player_lives,goal_items_collected, reimu, frame)
 
     elif game_state == "game_over":
+      screen.fill((0,0,0))
       draw_game_over_screen(screen)
 
     elif game_state == "game_clear":
+      screen.fill((0,0,0))
       draw_game_clear_screen(screen)
 
     # ゲーム進行
@@ -538,7 +581,7 @@ def main():
     pg.display.flip()
 
     # FPS制御
-    clock.tick(60)  # 30 FPSに制限
+    clock.tick(30)  # 30 FPSに制限
 
   # ゲームループ [ここまで]
   pg.quit()
