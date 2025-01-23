@@ -16,8 +16,8 @@ class EnemyCharacter:
         for i in range(4):
             self.__img_arr.append([])
             for j in range(3):
-                p = pg.Vector2(24 * j, 32 * i)
-                tmp = img_raw.subsurface(pg.Rect(p, (24, 32)))
+                p = pg.Vector2(48 * j, 48 * i)
+                tmp = img_raw.subsurface(pg.Rect(p, (48, 48)))
                 tmp = pg.transform.scale(tmp, self.size)
                 self.__img_arr[i].append(tmp)
             self.__img_arr[i].append(self.__img_arr[i][1])
@@ -164,7 +164,6 @@ class EnemyCharacter:
         if next_tile == "L":
           self.pos.y += (target_tile_y - current_tile_y) * tile_height
           #print(f"Moved enemy {direction} to ({current_tile_x}, {target_tile_y}).")
-        else:print(f"No ladder found at ({current_tile_x}, {target_tile_y}). Enemy did not move.")
     
     def move_up_ladder(self, ladder_rect):
         # 梯子に接触したら、梯子上を移動するロジック

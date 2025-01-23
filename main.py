@@ -172,12 +172,6 @@ def draw_game_elements(screen, stage_data, chip_s, reimu, enemies, items, frame)
         item_rect = pg.Rect(item[0] * chip_s, item[1] * chip_s, chip_s, chip_s)
         screen.blit(item_icon, item_rect)
 
-    # フレームカウンタの描画
-    frame += 1
-    frm_str = f'{frame:05}'
-    screen.blit(font.render(frm_str, True, 'BLACK'), (10, 10))
-    screen.blit(font.render(f'{reimu.pos}', True, 'BLACK'), (10, 20))
-
 
 # キー入力関連の処理を関数化
 def handle_keydown(event, reimu, stage_data, broken_tiles):
@@ -272,7 +266,7 @@ def main():
   difficulty = None
   while difficulty is None:
       buttons = display_home(screen)
-      difficulty = handle_home_events(buttons)
+      difficulty = handle_home_events(buttons,screen)
 
   print(f"選択された難易度: {difficulty}")
 
@@ -355,10 +349,6 @@ def main():
   # 初期化時に背景を描画してキャッシュ
   background_surface = pg.Surface((disp_w, disp_h))
   background_surface.fill((0, 0, 0))  # 背景色を設定
-  for x in range(0, disp_w, chip_s):  # 縦線
-    pg.draw.line(background_surface, grid_c, (x, 0), (x, disp_h))
-  for y in range(0, disp_h, chip_s):  # 横線
-    pg.draw.line(background_surface, grid_c, (0, y), (disp_w, y))
 
   # ゲームループ
   while not exit_flag:
