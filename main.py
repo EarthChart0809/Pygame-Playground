@@ -44,7 +44,7 @@ def handle_collisions(player_rect, goals, score):
     for goal in goals:
         if player_rect.colliderect(goal.rect):  # 矩形の衝突判定
             goals.remove(goal)  # ゴールを削除
-            score += 10  # スコア加算
+            score += 100  # スコア加算
             print("ゴール達成！")  # デバッグ用出力
     return score
 
@@ -216,14 +216,14 @@ def draw_game_over_screen(screen):
     screen.blit(text, (200, 200))
     screen.blit(restart_text, (300, 300))
 
-# ゲームクリア画面の描画
-def draw_game_clear_screen(screen):
-    font = pg.font.Font(None, 48)
-    text = font.render("Congratulations!", True, (0, 255, 0))
-    next_stage_text = font.render(
-        "Press R to Restart or Q to Quit", True, (255, 255, 255))
-    screen.blit(text, (200, 200))
-    screen.blit(next_stage_text, (200, 300))
+# # ゲームクリア画面の描画
+# def draw_game_clear_screen(screen):
+#     font = pg.font.Font(None, 48)
+#     text = font.render("Congratulations!", True, (0, 255, 0))
+#     next_stage_text = font.render(
+#         "Press R to Restart or Q to Quit", True, (255, 255, 255))
+#     screen.blit(text, (200, 200))
+#     screen.blit(next_stage_text, (200, 300))
 
 def get_settings(difficulty):
     if difficulty == "Easy":
@@ -234,6 +234,20 @@ def get_settings(difficulty):
         return {"stage_data": hard_stage, "enemies": hard_enemies, "items": hard_items}
     else:
         return {"stage_data": easy_stage, "enemies": easy_enemies, "items": easy_items}
+
+def draw_game_clear_screen(screen):
+    screen.fill((0, 0, 0))  # 背景を黒に設定
+    font_large = pg.font.Font(None, 80)  # 大きいフォントサイズ
+    font_small = pg.font.Font(None, 40)  # 小さいフォントサイズ
+
+    # ゲームクリアメッセージ
+    text_clear = font_large.render("ゲームクリア！", True, (255, 255, 0))  # 黄色の文字
+    screen.blit(text_clear, (200, 200))  # メッセージの位置
+
+    # 次の操作の案内
+    text_next = font_small.render(
+        "次のステージ (N) / 再スタート (R)", True, (255, 255, 255))  # 白色の文字
+    screen.blit(text_next, (200, 300))  # メッセージの位置
 
 # アイテムの位置リスト
 items = [(3, 4), (7, 7), (10, 16), (12, 16), (13, 10), (20, 7)]
@@ -255,7 +269,7 @@ lives = MAX_LIVES
 game_state = "playing"  # 初期状態はゲーム中
 
 def main():
-  global game_state, player_lives, goal_items_collected, stage
+  global game_state, player_lives, goal_items_collected, stage,items
 
   # 初期化処理
   pg.init()
@@ -442,8 +456,32 @@ def main():
       draw_game_over_screen(screen)
 
     elif game_state == "game_clear":
-      screen.fill((0,0,0))
+      # ゲームクリア画面の描画
       draw_game_clear_screen(screen)
+
+      # 次の操作を処理
+      for event in pg.event.get():
+        if event.type == pg.QUIT:
+            exit_flag = True
+        elif event.type == pg.KEYDOWN:
+            if event.key == pg.K_n:
+                # 次のステージに進む処理
+                stage += 1  # ステージを進める
+                game_state = "playing"  # プレイ状態に戻る
+                goal_items_collected = 0  # ゴールアイテムの収集数をリセット
+                reimu.reset_position()  # プレイヤーの位置を初期位置にリセット
+                # アイテムの再配置などの処理を追加
+                items = [(3, 4), (7, 7), (10, 16), (12, 16), (13, 10), (20, 7)]
+            elif event.key == pg.K_r:
+                # ゲームのリスタート処理
+                game_state = "playing"
+                player_lives = 3  # ライフを初期化
+                score = 0  # スコアを初期化
+                goal_items_collected = 0  # アイテムの収集数を初期化
+                stage = 1  # 最初のステージに戻る
+            elif event.key == pg.K_q:
+                # ゲーム終了
+                exit_flag = True
 
     # ゲーム進行
     screen.blit(background_surface, (0, 0))
@@ -502,6 +540,11 @@ def main():
     player_tile_pos = (int(reimu.pos.x), int(reimu.pos.y))
     if player_tile_pos in items:
       items.remove(player_tile_pos)  # アイテムを削除
+      goal_items_collected += 1  # アイテム収集数を増やす
+
+    # ゴールアイテムをすべて収集したかどうかをチェック
+    if goal_items_collected >= GOAL_ITEM_COUNT:
+      game_state = "game_clear"
 
     # 穴に落ちて埋まる判定
     player_x, player_y = int(reimu.pos.x), int(reimu.pos.y)
@@ -552,9 +595,10 @@ def main():
         game_over = True
 
     score = handle_collisions(reimu.rect, goals, score)
+    print(f"残りのゴール数: {len(goals)}")  # デバッグ用にゴールの数を表示
     if len(goals) == 0:  # 全ゴールを達成した場合
       print("すべてのゴールを達成しました！ゲームクリア")
-      game_over = True  # ゲームを終了状態に
+      game_state = "game_clear"
 
     # ステージ情報表示
     display_message(f"ステージ: {stage}", (0, 255, 0), -100)  # (0, 255, 0) は緑色
