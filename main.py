@@ -35,6 +35,10 @@ MAX_LIVES = 3
 GOAL_ITEM_COUNT = 10
 SCREEN_WIDTH = 800  # 画面の幅
 SCREEN_HEIGHT = 600  # 画面の高さ
+# HOME_SCREEN_MUSIC = "./data/music/home.mp3"
+PLAYING_MUSIC = "./data/music/hard.mp3"
+GAME_OVER_MUSIC = "./data/music/gameover.mp3"
+GAME_CLEAR_MUSIC = "./data/music/clear.mp3"
 
 def draw_score(surface, score):
     score_text = font.render(f"Score: {score}", True, (255, 255, 255))  # 白い文字
@@ -248,6 +252,17 @@ def get_settings_for_difficulty(difficulty):
     map_s = pg.Vector2(len(stage_data[0]), len(stage_data))  # マップの横・縦の配置数
     return settings, stage_data, enemy_positions, map_s
 
+def play_music_for_state(state):
+    # if state == "home":
+    #     pg.mixer.music.load(HOME_SCREEN_MUSIC)
+    if state == "playing":
+        pg.mixer.music.load(PLAYING_MUSIC)
+    elif state == "game_over":
+        pg.mixer.music.load(GAME_OVER_MUSIC)
+    elif state == "game_clear":
+        pg.mixer.music.load(GAME_CLEAR_MUSIC)
+    pg.mixer.music.play(-1)  # 音楽をループ再生
+
 # アイテムの位置リスト
 items = [(3, 4), (7, 7), (10, 16), (12, 16), (13, 10), (20, 7)]
 goal_positions = [(3, 4), (7, 5), (10, 15), (12, 18)]  # ゴールアイテムの位置
@@ -275,10 +290,20 @@ def main():
   # 初期化処理
   pg.init()
   chip_s = 32  # マップチップの基本サイズ
+  pg.mixer.init()  # Pygameのmixerモジュールを初期化
+  pg.mixer.music.set_volume(0.5)  # 音量を設定（0.0から1.0の範囲）
+
+
+  # # ホーム画面の音楽をロードして再生
+  # pg.mixer.music.load("path/to/your/home_screen_music.mp3")  # 音楽ファイルのパスを指定
+  # pg.mixer.music.play(-1)  # 音楽をループ再生
 
   # ホーム画面の表示
   screen = pg.display.set_mode((800, 600))
   difficulty = display_home_screen(screen)
+  # ホーム画面の音楽をロードして再生
+  pg.mixer.music.load("./data/music/hard.mp3")  # 音楽ファイルのパスを指定
+  pg.mixer.music.play(-1)  # 音楽をループ再生
 
   print(f"選択された難易度: {difficulty}")
 
@@ -443,8 +468,10 @@ def main():
       goal_count = check_goal_collision(reimu.rect, goals, goal_count)
       if goal_count == 0:
           game_state = "game_clear"
+          play_music_for_state(game_state)  # 音楽を切り替え
       if player_lives <= 0 and game_state == "playing":
-        game_state = "game_over"
+          game_state = "game_over"
+          play_music_for_state(game_state)  # 音楽を切り替え
 
       # 描画更新
       draw_fixed_info(screen, score, player_lives,goal_items_collected, reimu, frame)
