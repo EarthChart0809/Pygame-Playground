@@ -35,10 +35,13 @@ MAX_LIVES = 3
 GOAL_ITEM_COUNT = 10
 SCREEN_WIDTH = 800  # 画面の幅
 SCREEN_HEIGHT = 600  # 画面の高さ
-# HOME_SCREEN_MUSIC = "./data/music/home.mp3"
 PLAYING_MUSIC = "./data/music/hard.mp3"
 GAME_OVER_MUSIC = "./data/music/gameover.mp3"
 GAME_CLEAR_MUSIC = "./data/music/clear.mp3"
+DESTROY_TILE_SOUND = "./data/music/decrese.mp3"
+
+# 効果音をロード
+destroy_tile_sound = pg.mixer.Sound(DESTROY_TILE_SOUND)
 
 def draw_score(surface, score):
     score_text = font.render(f"Score: {score}", True, (255, 255, 255))  # 白い文字
@@ -169,7 +172,6 @@ def draw_game_elements(screen, stage_data, chip_s, reimu, enemies, items, frame)
         item_rect = pg.Rect(item[0] * chip_s, item[1] * chip_s, chip_s, chip_s)
         screen.blit(item_icon, item_rect)
 
-
 # キー入力関連の処理を関数化
 def handle_keydown(event, reimu, stage_data, broken_tiles):
     """
@@ -179,8 +181,10 @@ def handle_keydown(event, reimu, stage_data, broken_tiles):
 
     if event.key == pg.K_a:  # Aキーで左側の地面を壊す
         destroy_tile_by_key(reimu.pos, -1, stage_data, broken_tiles)
+        destroy_tile_sound.play()  # 効果音を再生
     elif event.key == pg.K_d:  # Dキーで右側の地面を壊す
         destroy_tile_by_key(reimu.pos, 1, stage_data, broken_tiles)
+        destroy_tile_sound.play()  # 効果音を再生
     elif event.key == pg.K_n :
         # 次のステージ
         goal_items_collected = 0
@@ -293,14 +297,10 @@ def main():
   pg.mixer.init()  # Pygameのmixerモジュールを初期化
   pg.mixer.music.set_volume(0.5)  # 音量を設定（0.0から1.0の範囲）
 
-
-  # # ホーム画面の音楽をロードして再生
-  # pg.mixer.music.load("path/to/your/home_screen_music.mp3")  # 音楽ファイルのパスを指定
-  # pg.mixer.music.play(-1)  # 音楽をループ再生
-
   # ホーム画面の表示
   screen = pg.display.set_mode((800, 600))
   difficulty = display_home_screen(screen)
+
   # ホーム画面の音楽をロードして再生
   pg.mixer.music.load("./data/music/hard.mp3")  # 音楽ファイルのパスを指定
   pg.mixer.music.play(-1)  # 音楽をループ再生
@@ -385,11 +385,17 @@ def main():
   # ゲームループ
   while not exit_flag:
     current_time = pg.time.get_ticks()
+
     # 穴に落ちて埋まる判定
     player_x, player_y = int(reimu.pos.x), int(reimu.pos.y)
-    if stage_data[player_y + 1][player_x] == "=" and stage_data[player_y][player_x] == "#":
-        print("穴に埋まりました！ゲームオーバー")
-        game_state = "game_over"
+    
+    # 穴に落ちて埋まる判定
+    if player_y + 1 < len(stage_data) and player_x < len(stage_data[0]):
+        below_player = stage_data[player_y + 1][player_x]
+        current_tile = stage_data[player_y][player_x]
+        if below_player == "=" and current_tile == "#":
+            print("穴に埋まりました！ゲームオーバー")
+            game_state = "game_over"
 
     # ライフが0になった場合のゲームオーバー判定
     if player_lives <= 0 and game_state == "playing":
@@ -496,6 +502,13 @@ def main():
                     difficulty)
                 print(f"選択された難易度: {difficulty}")
                 print(f"設定: {settings}")
+                game_state = "playing"  # プレイ状態に戻る
+                goal_items_collected = 0  # ゴールアイテムの収集数をリセット
+                # アイテムと敵の位置を初期化
+                items = settings["items"]
+                enemy_positions = settings["enemies"]
+                goal_positions = [(3, 4), (7, 5), (10, 15), (12, 18)]  # ゴールアイテムの位置
+                goal_count = handle_goal_progress(reimu.pos, goal_positions)  # ゴール進捗の更新
             elif event.key == pg.K_r:
                 # ゲームのリスタート処理
                 game_state = "playing"
@@ -503,6 +516,12 @@ def main():
                 score = 0  # スコアを初期化
                 goal_items_collected = 0  # アイテムの収集数を初期化
                 stage = 1  # 最初のステージに戻る
+                # アイテムの再配置などの処理を追加
+                # アイテムと敵の位置を初期化
+                settings, stage_data, enemy_positions, map_s = get_settings_for_difficulty(difficulty)
+                items = settings["items"]
+                enemy_positions = settings["enemies"]
+                goal_count = handle_goal_progress(reimu.pos, goal_positions)  # ゴール進捗の更新
             elif event.key == pg.K_q:
                 # ゲーム終了
                 exit_flag = True
